@@ -1,20 +1,30 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+ChoreoGraphManager 💃✨
+ChoreoGraphManager は、ダンスのフォーメーション作成、シミュレーション、そして動画コンテの作成を支援するプロフェッショナル向けツールです。 直感的な操作でダンサーを配置し、音楽に合わせて動きを確認・録画することができます。
+Github 公開用に、これまでの開発内容（React + Tauri + ビデオ出力機能など）を網羅した、見栄えの良い README.md のテンプレートを作成しました。
 
-# Run and deploy your AI Studio app
+機能の売りや、技術スタックもしっかり記述しています。そのままコピペして使えますし、必要に応じて修正してください！
 
-This contains everything you need to run your app locally.
+ChoreoGraphManager 💃✨
+ChoreoGraphManager は、ダンスのフォーメーション作成、シミュレーション、そして動画コンテの作成を支援するプロフェッショナル向けツールです。 直感的な操作でダンサーを配置し、音楽に合わせて動きを確認・録画することができます。
 
-View your app in AI Studio: https://ai.studio/apps/drive/1TGb_JGJtPrQZi0jV7tmgl5AEiPOHo4hf
+🚀 主な機能 (Features)
+ステージ・シミュレーション: ドラッグ＆ドロップでダンサーを配置・移動。
 
-## Run Locally
+タイムライン制御: キーフレーム方式で、曲のタイミングに合わせた移動を自動補間。
 
-**Prerequisites:**  Node.js
+音楽同期: ローカルの音声ファイル（MP3/WAV 等）を読み込み、再生・シークが可能。
 
+動画書き出し (Recording): 作成したシミュレーションを動画ファイル（WebM/MP4）として保存。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+レスポンシブ: スマートフォン、タブレット、PC に対応した UI。
+
+🛠 技術スタック (Tech Stack)
+Frontend: React (v19), TypeScript, Vite
+
+Styling: Tailwind CSS
+
+Icons: Lucide React
+
+Desktop Engine: Tauri v2 (Rust)
+
+Media: Web Audio API, MediaRecorder API, HTML5 Canvas
