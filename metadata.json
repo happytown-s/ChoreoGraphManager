@@ -1,0 +1,5 @@
+{
+  "name": "ChoreoGrapher AI",
+  "description": "A professional dance formation planning tool featuring timeline automation, keyframe interpolation, and video export.",
+  "requestFramePermissions": []
+}
