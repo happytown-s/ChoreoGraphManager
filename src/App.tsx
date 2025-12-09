@@ -139,8 +139,21 @@ function App() {
     const tick = (timestamp: number) => {
       if (!lastTimestamp) lastTimestamp = timestamp;
       
+      // 録画中はパフォーマンスを優先し、またAudioタグの再生状況に依存させないためDeltaTimeを使う
+      if (isRecording && isPlaying) {
+          const delta = timestamp - lastTimestamp;
+          setCurrentTime(prev => {
+            const next = prev + delta;
+            if (next >= duration) {
+              setIsPlaying(false);
+              if (isRecording) stopRecording();
+              return duration;
+            }
+            return next;
+          });
+      }
       // プレビュー中はAudioタグの時間を使う
-      if (audioFile && audioRef.current && isPlaying && !audioRef.current.paused) {
+      else if (audioFile && audioRef.current && isPlaying && !audioRef.current.paused) {
           const audioTime = audioRef.current.currentTime * 1000;
           setCurrentTime(prev => {
               if (audioTime >= duration) {
