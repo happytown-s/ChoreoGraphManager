@@ -330,9 +330,10 @@ function App() {
         }
 
         // MIMEタイプの優先順位を変更（MP4を優先）
+        // H.264 Baseline Profile (Safari friendly, safest for most environments)
         const mimeTypes = [
-            "video/mp4;codecs=avc1.4d002a", // H.264 Main Profile (Safari friendly)
             "video/mp4;codecs=avc1.42E01E", // H.264 Baseline Profile
+            "video/mp4;codecs=avc1.4d002a", // H.264 Main Profile
             'video/mp4; codecs="avc1.424028, mp4a.40.2"', // Constrained Baseline + AAC (Safe fallback)
             "video/mp4;codecs=h264",        // Generic H.264
             "video/mp4",                    // Generic MP4

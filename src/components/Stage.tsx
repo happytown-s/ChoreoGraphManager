@@ -112,7 +112,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
     getCanvasStream: () => {
         if (canvasRef.current) {
             // ストリーム取得
-            return canvasRef.current.captureStream(30);
+            return canvasRef.current.captureStream();
         }
         throw new Error("Canvas not initialized");
     },
