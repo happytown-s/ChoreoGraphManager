@@ -330,15 +330,23 @@ function App() {
         }
 
         // MIMEタイプの優先順位を変更（MP4を優先）
+        // H.264 Baseline Profile (Safari friendly, safest for most environments)
         const mimeTypes = [
-            "video/mp4;codecs=avc1.4d002a", // H.264 Main Profile (Safari friendly)
             "video/mp4;codecs=avc1.42E01E", // H.264 Baseline Profile
+            "video/mp4;codecs=avc1.4d002a", // H.264 Main Profile
             'video/mp4; codecs="avc1.424028, mp4a.40.2"', // Constrained Baseline + AAC (Safe fallback)
             "video/mp4;codecs=h264",        // Generic H.264
             "video/mp4",                    // Generic MP4
             "video/webm;codecs=vp9",        // WebM fallback
             "video/webm"
         ];
+
+        // Tauri (WKWebView) 特定のフォールバック: Generic MP4を優先してみる
+        // Baseline Profileでもダメな場合、システムデフォルトに任せる
+        if (isTauri()) {
+             // 既存のリストの先頭に、より緩い定義を追加
+             mimeTypes.unshift("video/mp4");
+        }
         const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || "";
         console.log(`Recording with mimeType: ${mimeType}`);
 

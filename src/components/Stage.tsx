@@ -112,7 +112,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
     getCanvasStream: () => {
         if (canvasRef.current) {
             // ストリーム取得
-            return canvasRef.current.captureStream(30);
+            return canvasRef.current.captureStream();
         }
         throw new Error("Canvas not initialized");
     },
@@ -126,13 +126,13 @@ const Stage = forwardRef<StageRef, StageProps>(({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // ★重要: alpha: false で不透明化して録画バグを防ぐ
-    // ★重要: Macアプリ対策セット
-    // willReadFrequently: true -> これが決定打！GPUを使わずCPUで描画させ、確実に録画できるようにする
+    // ★重要: Macアプリ対策 (Tauri/WKWebView)
+    // alpha: true (デフォルト) に戻す -> alpha: false だと録画が真っ黒になることがある
+    // willReadFrequently: false (デフォルト) に戻す -> captureStreamとの相性問題の可能性がある
     // preserveDrawingBuffer: true -> 念のため、描画バッファが消えないようにする
     const ctx = canvas.getContext('2d', { 
-        alpha: false,
-        willReadFrequently: true,
+        alpha: true,
+        willReadFrequently: false,
         preserveDrawingBuffer: true
     });
 
