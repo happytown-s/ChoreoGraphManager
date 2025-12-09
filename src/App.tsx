@@ -340,6 +340,13 @@ function App() {
             "video/webm;codecs=vp9",        // WebM fallback
             "video/webm"
         ];
+
+        // Tauri (WKWebView) 特定のフォールバック: Generic MP4を優先してみる
+        // Baseline Profileでもダメな場合、システムデフォルトに任せる
+        if (isTauri()) {
+             // 既存のリストの先頭に、より緩い定義を追加
+             mimeTypes.unshift("video/mp4");
+        }
         const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || "";
         console.log(`Recording with mimeType: ${mimeType}`);
 
