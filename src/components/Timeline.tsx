@@ -43,6 +43,8 @@ const Timeline: React.FC<TimelineProps> = ({
   const [draggingKeyframeId, setDraggingKeyframeId] = useState<string | null>(null);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
 
+  const [_, setResizeTrigger] = useState(0);
+
   // Global Mouse Up to stop dragging anything
   useEffect(() => {
     const handleUp = () => {
@@ -73,6 +75,14 @@ const Timeline: React.FC<TimelineProps> = ({
     };
   }, [draggingKeyframeId, isDraggingScrubber, duration, onUpdateKeyframeTime, onSeek]);
 
+  // Handle Resize for Canvas
+  useEffect(() => {
+      const handleResize = () => {
+          setResizeTrigger(prev => prev + 1);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Waveform Rendering
   useEffect(() => {
@@ -121,16 +131,6 @@ const Timeline: React.FC<TimelineProps> = ({
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
   }, [audioBuffer, duration, _]);
-
-  // Handle Resize for Canvas
-  const [_, setResizeTrigger] = useState(0);
-  useEffect(() => {
-      const handleResize = () => {
-          setResizeTrigger(prev => prev + 1);
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // If we clicked a keyframe, don't scrub
