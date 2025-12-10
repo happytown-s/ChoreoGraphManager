@@ -37,6 +37,8 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(30000); 
+
+  const [projectName, setProjectName] = useState("Untitled Project");
   
   const [audioFile, setAudioFile] = useState<string | null>(null);
   const [audioFileName, setAudioFileName] = useState<string | null>(null);
@@ -74,6 +76,29 @@ function App() {
           audioDestNodeRef.current = dest;
           console.log("Audio Context Initialized");
       }
+  }, []);
+
+  // Prevent Browser Zoom (Global)
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=')) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Sync Audio Play/Pause (Preview用)
@@ -455,6 +480,7 @@ function App() {
       try {
           const projectData = {
               version: 1,
+              projectName,
               dancers,
               keyframes,
               duration,
@@ -463,6 +489,7 @@ function App() {
 
           if (isTauri()) {
               const filePath = await save({
+                  defaultPath: `${projectName}.json`,
                   filters: [{
                       name: 'ChoreoGraph Project',
                       extensions: ['json']
@@ -478,7 +505,7 @@ function App() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `project-${Date.now()}.json`;
+              a.download = `${projectName}.json`;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
@@ -505,6 +532,7 @@ function App() {
                   const data = JSON.parse(content);
 
                   if (data.version === 1) {
+                      setProjectName(data.projectName || "Untitled Project");
                       setDancers(data.dancers || []);
                       setKeyframes(data.keyframes || []);
                       setDuration(data.duration || 30000);
@@ -529,6 +557,7 @@ function App() {
                       const text = await file.text();
                       const data = JSON.parse(text);
                       if (data.version === 1) {
+                        setProjectName(data.projectName || "Untitled Project");
                         setDancers(data.dancers || []);
                         setKeyframes(data.keyframes || []);
                         setDuration(data.duration || 30000);
@@ -602,11 +631,22 @@ function App() {
                     <Users className="text-white" size={18} />
                 </div>
                 <div>
-                    <h1 className="text-lg font-bold tracking-tight leading-tight">ChoreoGraphManager</h1>
+                    <h1 className="text-lg font-bold tracking-tight leading-tight hidden sm:block">ChoreoGraphManager</h1>
                 </div>
             </div>
         </div>
         
+        {/* Project Name Input */}
+        <div className="flex-1 mx-4 max-w-md">
+            <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="w-full bg-gray-800 text-white px-3 py-1.5 rounded border border-gray-700 focus:border-indigo-500 focus:outline-none text-center font-medium"
+                placeholder="Project Name"
+            />
+        </div>
+
         <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Project Controls */}
             <div className="flex items-center space-x-1 mr-2 border-r border-gray-700 pr-3">

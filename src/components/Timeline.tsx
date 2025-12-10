@@ -168,10 +168,14 @@ const Timeline: React.FC<TimelineProps> = ({
                     className={`flex items-center ${audioFileName ? 'text-indigo-400' : 'text-gray-400'} hover:text-white transition`}
                     title="Upload Music"
                 >
-                    <Music size={14} className="mr-1 sm:mr-2" />
-                    <span className="text-xs max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
-                        {audioFileName || "Add Music"}
-                    </span>
+                    {audioFileName ? (
+                         <span className="text-xs font-medium max-w-[150px] truncate">{audioFileName}</span>
+                    ) : (
+                        <>
+                            <Music size={14} className="mr-1 sm:mr-2" />
+                            <span className="text-xs max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">Add Music</span>
+                        </>
+                    )}
                 </button>
             </div>
 
