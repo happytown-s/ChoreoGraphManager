@@ -429,12 +429,20 @@ function App() {
                 return;
             }
 
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const H = String(now.getHours()).padStart(2, '0');
+            const M = String(now.getMinutes()).padStart(2, '0');
+            const formattedDate = `${y}${m}${d}-${H}${M}`;
+
             if (isTauri()) {
                 try {
                     // 拡張子判定
                     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
                     const filePath = await save({
-                        defaultPath: `choreography-${Date.now()}.${ext}`,
+                        defaultPath: `${projectName}-${formattedDate}.${ext}`,
                         filters: [{
                             name: 'Video',
                             extensions: [ext]
@@ -455,7 +463,7 @@ function App() {
                 const a = document.createElement('a');
                 a.href = url;
                 const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-                a.download = `choreography-${Date.now()}.${ext}`;
+                a.download = `${projectName}-${formattedDate}.${ext}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
