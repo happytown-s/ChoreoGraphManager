@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dancer, Keyframe, Position, STAGE_WIDTH, STAGE_HEIGHT } from './types';
 import Timeline from './components/Timeline';
 import Stage, { StageRef } from './components/Stage';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { 
   Users, Video, Plus, Trash, Menu, X, ChevronDown, ChevronUp, 
-  Grid, Play, Pause, SkipForward, SkipBack, Magnet, Search
+  Grid, Play, Pause, SkipForward, SkipBack, Magnet, Search, Save, FolderOpen
 } from 'lucide-react';
 
 const INITIAL_DANCERS: Dancer[] = [
@@ -139,8 +139,21 @@ function App() {
     const tick = (timestamp: number) => {
       if (!lastTimestamp) lastTimestamp = timestamp;
       
+      // 録画中はパフォーマンスを優先し、またAudioタグの再生状況に依存させないためDeltaTimeを使う
+      if (isRecording && isPlaying) {
+          const delta = timestamp - lastTimestamp;
+          setCurrentTime(prev => {
+            const next = prev + delta;
+            if (next >= duration) {
+              setIsPlaying(false);
+              if (isRecording) stopRecording();
+              return duration;
+            }
+            return next;
+          });
+      }
       // プレビュー中はAudioタグの時間を使う
-      if (audioFile && audioRef.current && isPlaying && !audioRef.current.paused) {
+      else if (audioFile && audioRef.current && isPlaying && !audioRef.current.paused) {
           const audioTime = audioRef.current.currentTime * 1000;
           setCurrentTime(prev => {
               if (audioTime >= duration) {
@@ -343,10 +356,10 @@ function App() {
 
         // Tauri (WKWebView) 特定のフォールバック: Generic MP4を優先してみる
         // Baseline Profileでもダメな場合、システムデフォルトに任せる
-        if (isTauri()) {
+        // if (isTauri()) {
              // 既存のリストの先頭に、より緩い定義を追加
-             mimeTypes.unshift("video/mp4");
-        }
+             // mimeTypes.unshift("video/mp4");
+        // }
         const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || "";
         console.log(`Recording with mimeType: ${mimeType}`);
 
@@ -437,6 +450,103 @@ function App() {
     }
   };
 
+  // --- Project Save/Load ---
+  const saveProject = async () => {
+      try {
+          const projectData = {
+              version: 1,
+              dancers,
+              keyframes,
+              duration,
+              audioFileName
+          };
+
+          if (isTauri()) {
+              const filePath = await save({
+                  filters: [{
+                      name: 'ChoreoGraph Project',
+                      extensions: ['json']
+                  }]
+              });
+
+              if (filePath) {
+                  await writeTextFile(filePath, JSON.stringify(projectData, null, 2));
+                  alert("Project saved successfully!");
+              }
+          } else {
+              const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `project-${Date.now()}.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+          }
+      } catch (e) {
+          console.error("Failed to save project:", e);
+          alert("Failed to save project.");
+      }
+  };
+
+  const loadProject = async () => {
+      try {
+          if (isTauri()) {
+              const filePath = await open({
+                  filters: [{
+                      name: 'ChoreoGraph Project',
+                      extensions: ['json']
+                  }]
+              });
+
+              if (filePath && typeof filePath === 'string') {
+                  const content = await readTextFile(filePath);
+                  const data = JSON.parse(content);
+
+                  if (data.version === 1) {
+                      setDancers(data.dancers || []);
+                      setKeyframes(data.keyframes || []);
+                      setDuration(data.duration || 30000);
+                      setAudioFileName(data.audioFileName || null);
+                      // Reset audio file content as we can't load it from path easily/securely without user action usually
+                      // But we keep the name so user knows what to load
+                      setAudioFile(null);
+                      setAudioBuffer(null);
+                      alert(`Project loaded! Please re-upload audio: ${data.audioFileName || "None"}`);
+                  } else {
+                      alert("Unknown project version.");
+                  }
+              }
+          } else {
+              // Web fallback (input file)
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.json';
+              input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) {
+                      const text = await file.text();
+                      const data = JSON.parse(text);
+                      if (data.version === 1) {
+                        setDancers(data.dancers || []);
+                        setKeyframes(data.keyframes || []);
+                        setDuration(data.duration || 30000);
+                        setAudioFileName(data.audioFileName || null);
+                        setAudioFile(null);
+                        setAudioBuffer(null);
+                        alert(`Project loaded! Please re-upload audio: ${data.audioFileName || "None"}`);
+                      }
+                  }
+              };
+              input.click();
+          }
+      } catch (e) {
+          console.error("Failed to load project:", e);
+          alert("Failed to load project.");
+      }
+  };
+
   const addNewDancer = () => {
     const newId = `d${Date.now()}`;
     const newDancer: Dancer = {
@@ -498,6 +608,24 @@ function App() {
         </div>
         
         <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Project Controls */}
+            <div className="flex items-center space-x-1 mr-2 border-r border-gray-700 pr-3">
+                <button
+                    onClick={loadProject}
+                    className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition"
+                    title="Load Project"
+                >
+                    <FolderOpen size={18} />
+                </button>
+                <button
+                    onClick={saveProject}
+                    className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition"
+                    title="Save Project"
+                >
+                    <Save size={18} />
+                </button>
+            </div>
+
             <button 
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={isPlaying && !isRecording}
