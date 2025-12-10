@@ -250,13 +250,30 @@ function App() {
       }
   };
 
-  const handleSeek = (time: number) => {
-    if (isPlaying) setIsPlaying(false);
-    setCurrentTime(time);
-    if (audioRef.current && audioFile) {
-        audioRef.current.currentTime = time / 1000;
+  const handleSeek = useCallback((time: number) => {
+    const newTime = Math.max(0, Math.min(time, duration));
+
+    // UIを即座に更新
+    setCurrentTime(newTime);
+
+    const audio = audioRef.current;
+    if (audio && audioFile) {
+        // 再生中なら一時停止して、ループや競合を防ぐ
+        if (isPlaying) {
+             setIsPlaying(false);
+             audio.pause();
+        }
+
+        // fastSeekが使える場合は使う（よりスムーズなシーク）
+        if ('fastSeek' in audio) {
+             (audio as any).fastSeek(newTime / 1000);
+        } else {
+             audio.currentTime = newTime / 1000;
+        }
+    } else {
+        if (isPlaying) setIsPlaying(false);
     }
-  };
+  }, [duration, isPlaying, audioFile]);
 
   const handlePositionChange = (dancerId: string, newPos: Position) => {
     setIsPlaying(false);

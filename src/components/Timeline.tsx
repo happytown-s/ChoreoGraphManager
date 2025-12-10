@@ -133,6 +133,9 @@ const Timeline: React.FC<TimelineProps> = ({
   }, [audioBuffer, duration, _]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+      // Only Left Click
+      if (e.button !== 0) return;
+
       // If we clicked a keyframe, don't scrub
       if ((e.target as HTMLElement).closest('.keyframe-marker')) return;
       
