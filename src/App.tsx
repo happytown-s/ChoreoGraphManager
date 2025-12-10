@@ -5,7 +5,7 @@ import Stage, { StageRef } from './components/Stage';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { 
-  Users, Video, Plus, Trash, Menu, X, ChevronDown, ChevronUp, 
+  Users, Video, Plus, Trash2, Menu, X, ChevronDown, ChevronUp,
   Grid, Play, Pause, SkipForward, SkipBack, Magnet, Search, Save, FolderOpen
 } from 'lucide-react';
 
@@ -67,14 +67,22 @@ function App() {
   useEffect(() => {
       // AudioContextと録音用ノードだけ作っておく
       if (!audioContextRef.current) {
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          const ctx = new AudioContextClass();
-          audioContextRef.current = ctx;
-          
-          // 録音用の出力先（Destination）を作成
-          const dest = ctx.createMediaStreamDestination();
-          audioDestNodeRef.current = dest;
-          console.log("Audio Context Initialized");
+          try {
+              const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+              if (AudioContextClass) {
+                  const ctx = new AudioContextClass();
+                  audioContextRef.current = ctx;
+
+                  // 録音用の出力先（Destination）を作成
+                  const dest = ctx.createMediaStreamDestination();
+                  audioDestNodeRef.current = dest;
+                  console.log("Audio Context Initialized");
+              } else {
+                  console.warn("AudioContext not supported in this environment");
+              }
+          } catch (e) {
+              console.error("Failed to initialize AudioContext:", e);
+          }
       }
   }, []);
 
@@ -711,7 +719,7 @@ function App() {
                                 <input type="color" value={dancer.color} onChange={(e) => updateDancer(dancer.id, { color: e.target.value })} className="w-5 h-5 rounded-full overflow-hidden border-0 p-0 bg-transparent cursor-pointer shrink-0" />
                                 <input type="text" value={dancer.name} onChange={(e) => updateDancer(dancer.id, { name: e.target.value })} className={`bg-transparent border-none focus:outline-none text-sm font-medium w-full ${selectedDancerId === dancer.id ? 'text-white' : 'text-gray-300'}`} onClick={(e) => e.stopPropagation()} placeholder="Name" />
                             </div>
-                            <button onClick={(e) => removeDancer(dancer.id, e)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition"><Trash size={14} /></button>
+                            <button onClick={(e) => removeDancer(dancer.id, e)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition"><Trash2 size={14} /></button>
                         </div>
                     ))}
                 </div>

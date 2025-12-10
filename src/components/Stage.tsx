@@ -136,6 +136,8 @@ const Stage = forwardRef<StageRef, StageProps>(({
         preserveDrawingBuffer: true
     });
 
+    if (!ctx) return;
+
     // 画面クリア
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0f172a'; // 背景色
