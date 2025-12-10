@@ -17,6 +17,7 @@ interface TimelineProps {
   onJumpNext: () => void;
   onAudioUpload: (file: File) => void;
   audioFileName: string | null;
+  audioBuffer: AudioBuffer | null;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -33,9 +34,11 @@ const Timeline: React.FC<TimelineProps> = ({
   onJumpPrev,
   onJumpNext,
   onAudioUpload,
-  audioFileName
+  audioFileName,
+  audioBuffer
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingKeyframeId, setDraggingKeyframeId] = useState<string | null>(null);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
@@ -70,6 +73,64 @@ const Timeline: React.FC<TimelineProps> = ({
     };
   }, [draggingKeyframeId, isDraggingScrubber, duration, onUpdateKeyframeTime, onSeek]);
 
+
+  // Waveform Rendering
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !timelineRef.current) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Canvas size sync
+    const rect = timelineRef.current.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!audioBuffer) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerY = height / 2;
+
+    const data = audioBuffer.getChannelData(0);
+    // duration (ms) -> samples: audioBuffer.sampleRate * (duration / 1000)
+    // We only want to draw up to `duration`, not the whole file if it's longer
+    const totalSamplesToDraw = Math.floor(audioBuffer.sampleRate * (duration / 1000));
+    const step = Math.ceil(totalSamplesToDraw / width);
+    const amp = height / 2;
+
+    ctx.fillStyle = '#4f46e5'; // Indigo-600
+    ctx.beginPath();
+
+    for (let i = 0; i < width; i++) {
+        let min = 1.0;
+        let max = -1.0;
+
+        const startIndex = i * step;
+        if (startIndex >= data.length) break;
+
+        for (let j = 0; j < step; j++) {
+            const datum = data[startIndex + j];
+            if (datum < min) min = datum;
+            if (datum > max) max = datum;
+        }
+
+        ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
+    }
+  }, [audioBuffer, duration]);
+
+  // Handle Resize for Canvas
+  const [_, setResizeTrigger] = useState(0);
+  useEffect(() => {
+      const handleResize = () => {
+          setResizeTrigger(prev => prev + 1);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // If we clicked a keyframe, don't scrub
@@ -221,6 +282,12 @@ const Timeline: React.FC<TimelineProps> = ({
             className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
             onMouseDown={handleTimelineMouseDown}
         >
+            {/* Waveform Canvas */}
+            <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full opacity-50 pointer-events-none"
+            />
+
             {/* Grid Lines */}
             <div className="absolute inset-0 flex pointer-events-none">
                 {Array.from({ length: 12 }).map((_, i) => (

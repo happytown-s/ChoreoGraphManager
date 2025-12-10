@@ -750,7 +750,7 @@ function App() {
              </button>
         </div>
         <div className={isTimelineExpanded ? 'h-full' : 'hidden'}>
-            <Timeline duration={duration} setDuration={setDuration} currentTime={currentTime} isPlaying={isPlaying} keyframes={keyframes} onSeek={handleSeek} onTogglePlay={() => setIsPlaying(!isPlaying)} onAddKeyframe={handleAddKeyframe} onDeleteKeyframe={handleDeleteKeyframe} onUpdateKeyframeTime={handleUpdateKeyframeTime} onJumpPrev={handleJumpPrevKeyframe} onJumpNext={handleJumpNextKeyframe} onAudioUpload={handleAudioUpload} audioFileName={audioFileName} />
+            <Timeline duration={duration} setDuration={setDuration} currentTime={currentTime} isPlaying={isPlaying} keyframes={keyframes} onSeek={handleSeek} onTogglePlay={() => setIsPlaying(!isPlaying)} onAddKeyframe={handleAddKeyframe} onDeleteKeyframe={handleDeleteKeyframe} onUpdateKeyframeTime={handleUpdateKeyframeTime} onJumpPrev={handleJumpPrevKeyframe} onJumpNext={handleJumpNextKeyframe} onAudioUpload={handleAudioUpload} audioFileName={audioFileName} audioBuffer={audioBuffer} />
         </div>
         {!isTimelineExpanded && (
              <div className="flex items-center justify-between px-4 h-full">
