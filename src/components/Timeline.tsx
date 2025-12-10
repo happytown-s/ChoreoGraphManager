@@ -120,7 +120,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
-  }, [audioBuffer, duration]);
+  }, [audioBuffer, duration, _]);
 
   // Handle Resize for Canvas
   const [_, setResizeTrigger] = useState(0);
