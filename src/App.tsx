@@ -436,13 +436,14 @@ function App() {
             const H = String(now.getHours()).padStart(2, '0');
             const M = String(now.getMinutes()).padStart(2, '0');
             const formattedDate = `${y}${m}${d}-${H}${M}`;
+            const safeProjectName = projectName.replace(/[^a-z0-9_\-\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/gi, '_');
 
             if (isTauri()) {
                 try {
                     // 拡張子判定
                     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
                     const filePath = await save({
-                        defaultPath: `${projectName}-${formattedDate}.${ext}`,
+                        defaultPath: `${safeProjectName}-${formattedDate}.${ext}`,
                         filters: [{
                             name: 'Video',
                             extensions: [ext]
@@ -463,7 +464,7 @@ function App() {
                 const a = document.createElement('a');
                 a.href = url;
                 const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-                a.download = `${projectName}-${formattedDate}.${ext}`;
+                a.download = `${safeProjectName}-${formattedDate}.${ext}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -750,7 +751,7 @@ function App() {
              </button>
         </div>
         <div className={isTimelineExpanded ? 'h-full' : 'hidden'}>
-            <Timeline duration={duration} setDuration={setDuration} currentTime={currentTime} isPlaying={isPlaying} keyframes={keyframes} onSeek={handleSeek} onTogglePlay={() => setIsPlaying(!isPlaying)} onAddKeyframe={handleAddKeyframe} onDeleteKeyframe={handleDeleteKeyframe} onUpdateKeyframeTime={handleUpdateKeyframeTime} onJumpPrev={handleJumpPrevKeyframe} onJumpNext={handleJumpNextKeyframe} onAudioUpload={handleAudioUpload} audioFileName={audioFileName} />
+            <Timeline duration={duration} setDuration={setDuration} currentTime={currentTime} isPlaying={isPlaying} keyframes={keyframes} onSeek={handleSeek} onTogglePlay={() => setIsPlaying(!isPlaying)} onAddKeyframe={handleAddKeyframe} onDeleteKeyframe={handleDeleteKeyframe} onUpdateKeyframeTime={handleUpdateKeyframeTime} onJumpPrev={handleJumpPrevKeyframe} onJumpNext={handleJumpNextKeyframe} onAudioUpload={handleAudioUpload} audioFileName={audioFileName} audioBuffer={audioBuffer} />
         </div>
         {!isTimelineExpanded && (
              <div className="flex items-center justify-between px-4 h-full">
