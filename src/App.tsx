@@ -341,7 +341,7 @@ function App() {
   const startRecording = async () => {
     if (!stageRef.current) return;
     
-    stageRef.current.resetView();
+    // stageRef.current.resetView(); // 録画用キャンバスを使用するため、メインビューのリセットは不要
     setCurrentTime(0);
     
     // 録画中はプレビュー用の音声を止める（二重再生防止）

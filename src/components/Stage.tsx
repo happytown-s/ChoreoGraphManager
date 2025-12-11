@@ -36,6 +36,9 @@ const Stage = forwardRef<StageRef, StageProps>(({
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 録画専用のCanvas
+  const recordingCanvasRef = useRef<HTMLCanvasElement>(null);
+
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
   
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
@@ -110,41 +113,31 @@ const Stage = forwardRef<StageRef, StageProps>(({
   // --- 4. 外部公開メソッド ---
   useImperativeHandle(ref, () => ({
     getCanvasStream: () => {
-        if (canvasRef.current) {
-            // ストリーム取得
-            return canvasRef.current.captureStream(30);
+        if (recordingCanvasRef.current) {
+            // 録画用Canvasからストリーム取得
+            return recordingCanvasRef.current.captureStream(30);
         }
-        throw new Error("Canvas not initialized");
+        throw new Error("Recording Canvas not initialized");
     },
     resetView: () => {
         fitStageToCanvas(); // 安全版のフィット関数を使う
     }
   }));
 
-  // --- 5. 描画ループ ---
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // ★重要: Macアプリ対策 (Tauri/WKWebView)
-    // alpha: true (デフォルト) に戻す -> alpha: false だと録画が真っ黒になることがある
-    // willReadFrequently: false (デフォルト) に戻す -> captureStreamとの相性問題の可能性がある
-    // preserveDrawingBuffer: true -> 念のため、描画バッファが消えないようにする
-    const ctx = canvas.getContext('2d', { 
-        alpha: true,
-        willReadFrequently: false,
-        preserveDrawingBuffer: true
-    });
-
-    if (!ctx) return;
-
+  // --- 描画ロジックの抽出 ---
+  const drawScene = (
+      ctx: CanvasRenderingContext2D,
+      width: number,
+      height: number,
+      currentTransform: { x: number, y: number, k: number }
+  ) => {
     // 画面クリア
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0f172a'; // 背景色
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, width, height);
 
     // 変換適用
-    ctx.setTransform(transform.k, 0, 0, transform.k, transform.x, transform.y);
+    ctx.setTransform(currentTransform.k, 0, 0, currentTransform.k, currentTransform.x, currentTransform.y);
 
     // === ここから描画 ===
     
@@ -159,7 +152,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
     
     // Border
     ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 2 / transform.k;
+    ctx.lineWidth = 2 / currentTransform.k;
     ctx.strokeRect(0, 0, STAGE_WIDTH, STAGE_HEIGHT);
 
     const centerX = STAGE_WIDTH / 2;
@@ -169,7 +162,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
     if (gridSize > 0) {
         const drawGridLines = (start: number, end: number, step: number, isVertical: boolean, isWing: boolean) => {
              ctx.strokeStyle = isWing ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.5)';
-             ctx.lineWidth = 1 / transform.k;
+             ctx.lineWidth = 1 / currentTransform.k;
              const offset = isVertical ? centerX % step : centerY % step;
              const firstLine = Math.floor((start - offset) / step) * step + offset;
 
@@ -195,7 +188,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
     // Center Cross
     ctx.beginPath();
     ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 3 / transform.k;
+    ctx.lineWidth = 3 / currentTransform.k;
     const crossSize = gridSize > 0 ? gridSize : 50;
     ctx.moveTo(centerX, centerY - crossSize);
     ctx.lineTo(centerX, centerY + crossSize);
@@ -240,7 +233,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
         ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
         ctx.fill();
         ctx.strokeStyle = '#FACC15';
-        ctx.lineWidth = 2 / transform.k;
+        ctx.lineWidth = 2 / currentTransform.k;
         ctx.stroke();
       }
 
@@ -250,7 +243,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
       ctx.fillStyle = dancer.color;
       ctx.fill();
       ctx.strokeStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = (isSelected ? 3 : 1) / transform.k;
+      ctx.lineWidth = (isSelected ? 3 : 1) / currentTransform.k;
       ctx.stroke();
 
       // Initial
@@ -262,13 +255,13 @@ const Stage = forwardRef<StageRef, StageProps>(({
 
       // Full Name
       const screenFontSize = 14; 
-      const worldFontSize = Math.max(1, screenFontSize / transform.k);
+      const worldFontSize = Math.max(1, screenFontSize / currentTransform.k);
       ctx.font = `bold ${worldFontSize}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       const labelY = pos.y + 20;
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.lineWidth = 3 / transform.k;
+      ctx.lineWidth = 3 / currentTransform.k;
       ctx.strokeText(dancer.name, pos.x, labelY);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(dancer.name, pos.x, labelY);
@@ -281,6 +274,48 @@ const Stage = forwardRef<StageRef, StageProps>(({
     ctx.textBaseline = 'middle';
     ctx.fillText("WING L", -WINGS_WIDTH / 2, STAGE_HEIGHT / 2);
     ctx.fillText("WING R", STAGE_WIDTH + WINGS_WIDTH / 2, STAGE_HEIGHT / 2);
+  };
+
+  // --- 5. 描画ループ ---
+  useEffect(() => {
+    // Main Canvas Drawing
+    const canvas = canvasRef.current;
+    if (canvas) {
+        const ctx = canvas.getContext('2d', {
+            alpha: true,
+            willReadFrequently: false,
+            preserveDrawingBuffer: true
+        });
+
+        if (ctx) {
+            drawScene(ctx, canvas.width, canvas.height, transform);
+        }
+    }
+
+    // Recording Canvas Drawing
+    // 録画用キャンバスは常に描画しておくことで、いつ録画開始されてもOKにする
+    // 負荷が気になる場合は isRecording で制御してもよいが、プレビューと録画の開始ラグを防ぐために常時描画が安全
+    const recCanvas = recordingCanvasRef.current;
+    if (recCanvas) {
+        const recCtx = recCanvas.getContext('2d', {
+            alpha: true,
+            willReadFrequently: false,
+            preserveDrawingBuffer: true
+        });
+
+        if (recCtx) {
+            // 固定サイズ描画
+            // Width: STAGE_WIDTH + WINGS_WIDTH * 2
+            // Height: STAGE_HEIGHT
+            // Transform: Scale 1, Translate (WINGS_WIDTH, 0) -> Left edge (-WINGS_WIDTH) becomes 0
+            const fixedTransform = {
+                x: WINGS_WIDTH,
+                y: 0,
+                k: 1
+            };
+            drawScene(recCtx, recCanvas.width, recCanvas.height, fixedTransform);
+        }
+    }
 
   }, [dancers, positions, draggedDancerId, isRecording, selectedDancerId, gridSize, transform, canvasSize]);
 
@@ -440,6 +475,13 @@ const Stage = forwardRef<StageRef, StageProps>(({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+      />
+      {/* Recording Canvas (Hidden) */}
+      <canvas
+        ref={recordingCanvasRef}
+        width={STAGE_WIDTH + WINGS_WIDTH * 2}
+        height={STAGE_HEIGHT}
+        className="hidden"
       />
     </div>
   );
