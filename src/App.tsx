@@ -59,9 +59,19 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(1);
   
   const [isRecording, setIsRecording] = useState(false);
+  const isPreparingRecording = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const stageRef = useRef<StageRef>(null);
+
+  // Audio File Memory Cleanup
+  useEffect(() => {
+    return () => {
+      if (audioFile) {
+        URL.revokeObjectURL(audioFile);
+      }
+    };
+  }, [audioFile]);
 
   // --- Audio Graph Setup (初期化) ---
   useEffect(() => {
@@ -339,8 +349,10 @@ function App() {
 
   // --- 【最強版】Video Recording ---
   const startRecording = async () => {
-    if (!stageRef.current) return;
+    if (!stageRef.current || isPreparingRecording.current || isRecording) return;
     
+    isPreparingRecording.current = true;
+
     // stageRef.current.resetView(); // 録画用キャンバスを使用するため、メインビューのリセットは不要
     setCurrentTime(0);
     
@@ -358,7 +370,7 @@ function App() {
         if (audioRef.current) audioRef.current.play(); // 映像のコマ送りのために再生
 
         const canvasStream = stageRef.current!.getCanvasStream();
-        let finalStream = canvasStream;
+        let finalStream = new MediaStream(canvasStream.getTracks());
         
         // 録音用ソースノード（使い捨て）
         let bufferSource: AudioBufferSourceNode | null = null;
@@ -383,9 +395,7 @@ function App() {
                 const audioTracks = audioDestNodeRef.current.stream.getAudioTracks();
                 if (audioTracks.length > 0) {
                      console.log("Audio tracks mixed successfully");
-                     canvasStream.addTrack(audioTracks[0]);
-                     finalStream = canvasStream;
-                     
+                     finalStream.addTrack(audioTracks[0]);
                 }
              } catch (e) {
                  console.warn("AudioBuffer mixing failed:", e);
@@ -436,6 +446,7 @@ function App() {
         };
 
         mediaRecorder.onstop = async () => {
+            isPreparingRecording.current = false;
             // クリーンアップ
             if (bufferSource) {
                 try { bufferSource.stop(); } catch {}
@@ -568,7 +579,7 @@ function App() {
                   if (data.version === 1) {
                       setProjectName(data.projectName || "Untitled Project");
                       setDancers(data.dancers || []);
-                      setKeyframes(data.keyframes || []);
+                      setKeyframes((data.keyframes || []).sort((a: Keyframe, b: Keyframe) => a.timestamp - b.timestamp));
                       setDuration(data.duration || 30000);
                       setAudioFileName(data.audioFileName || null);
                       // Reset audio file content as we can't load it from path easily/securely without user action usually
@@ -593,7 +604,7 @@ function App() {
                       if (data.version === 1) {
                         setProjectName(data.projectName || "Untitled Project");
                         setDancers(data.dancers || []);
-                        setKeyframes(data.keyframes || []);
+                        setKeyframes((data.keyframes || []).sort((a: Keyframe, b: Keyframe) => a.timestamp - b.timestamp));
                         setDuration(data.duration || 30000);
                         setAudioFileName(data.audioFileName || null);
                         setAudioFile(null);
