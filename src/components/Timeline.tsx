@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useState, useEffect, useLayoutEffect } from 'react';
 import { Keyframe } from '../types';
-import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface TimelineProps {
   duration: number;
@@ -44,6 +44,9 @@ const Timeline: React.FC<TimelineProps> = ({
   const [draggingKeyframeId, setDraggingKeyframeId] = useState<string | null>(null);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const [zoom, setZoom] = useState(1);
+
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 20;
 
   // Touch states for zoom
   const [touchDist, setTouchDist] = useState<number | null>(null);
@@ -165,7 +168,9 @@ const Timeline: React.FC<TimelineProps> = ({
       }
   };
 
-  const applyZoom = (newZoom: number) => {
+  const applyZoom = (targetZoom: number) => {
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+
     if (newZoom !== zoom && scrollContainerRef.current) {
         const containerWidth = scrollContainerRef.current.clientWidth;
         const ratio = currentTime / duration;
@@ -184,8 +189,7 @@ const Timeline: React.FC<TimelineProps> = ({
         e.preventDefault();
         const delta = -e.deltaY;
         const scaleAmount = 0.1;
-        const newZoom = Math.max(1, zoom + (delta > 0 ? scaleAmount : -scaleAmount));
-        applyZoom(newZoom);
+        applyZoom(zoom + (delta > 0 ? scaleAmount : -scaleAmount));
     }
   };
 
@@ -208,28 +212,25 @@ const Timeline: React.FC<TimelineProps> = ({
           const t2 = e.touches[1];
           const dist = Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
 
-          // Determine scale factor
-          // We dampen it a bit or map ratio directly
-          const scale = dist / touchDist;
-          // Apply scale to current zoom
-          // We need to be careful not to exponentialize too fast if this event fires rapidly with same base
-          // Actually, we should use the initial dist as base if we had a "startZoom".
-          // But here we rely on differential updates which is risky.
-          // Better approach: Calculate new zoom based on ratio * currentZoom, then update currentZoom
-          // But React state is async.
-          // Simple additive approach for stability:
           const diff = dist - touchDist;
           // 1px diff -> 0.01 zoom change
           const zoomChange = diff * 0.01;
-          const newZoom = Math.max(1, zoom + zoomChange);
 
-          applyZoom(newZoom);
+          applyZoom(zoom + zoomChange);
           setTouchDist(dist); // Update dist so next move is relative to this
       }
   };
 
   const handleTouchEnd = () => {
       setTouchDist(null);
+  };
+
+  const handleZoomIn = () => {
+    applyZoom(Math.floor(zoom * 2) / 2 + 0.5); // Steps of 0.5
+  };
+
+  const handleZoomOut = () => {
+    applyZoom(Math.ceil(zoom * 2) / 2 - 0.5);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,6 +341,26 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
+             {/* Zoom Buttons */}
+             <div className="flex items-center bg-gray-900 rounded-lg border border-gray-700 p-0.5">
+                <button
+                    onClick={handleZoomOut}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
+                    title="Zoom Out"
+                    disabled={zoom <= MIN_ZOOM}
+                >
+                    <ZoomOut size={16} />
+                </button>
+                <button
+                    onClick={handleZoomIn}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
+                    title="Zoom In"
+                    disabled={zoom >= MAX_ZOOM}
+                >
+                    <ZoomIn size={16} />
+                </button>
+             </div>
+
             {activeKeyframe ? (
                  <button
                  onClick={() => onDeleteKeyframe(activeKeyframe.id)}
