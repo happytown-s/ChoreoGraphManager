@@ -38,10 +38,12 @@ const Timeline: React.FC<TimelineProps> = ({
   audioBuffer
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingKeyframeId, setDraggingKeyframeId] = useState<string | null>(null);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   const [_, setResizeTrigger] = useState(0);
 
@@ -94,8 +96,9 @@ const Timeline: React.FC<TimelineProps> = ({
 
     // Canvas size sync
     const rect = timelineRef.current.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    // Prevent 0 width canvas errors
+    canvas.width = Math.max(1, rect.width);
+    canvas.height = Math.max(1, rect.height);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -130,7 +133,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
-  }, [audioBuffer, duration, _]);
+  }, [audioBuffer, duration, zoom, _]); // Added zoom to dependencies
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // Only Left Click
@@ -148,6 +151,38 @@ const Timeline: React.FC<TimelineProps> = ({
         const percentage = Math.max(0, Math.min(1, x / rect.width));
         onSeek(percentage * duration);
       }
+  };
+
+  // Zoom Logic
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = -e.deltaY;
+        const scaleAmount = 0.1;
+        const newZoom = Math.max(1, zoom + (delta > 0 ? scaleAmount : -scaleAmount));
+
+        if (newZoom !== zoom && scrollContainerRef.current) {
+            const containerWidth = scrollContainerRef.current.clientWidth;
+            // Calculate how much the content under the playhead moves
+            // Playhead position ratio (0 to 1)
+            const ratio = currentTime / duration;
+            // Shift = ratio * width * (newZoom - oldZoom)
+            const scrollShift = ratio * containerWidth * (newZoom - zoom);
+
+            const currentScroll = scrollContainerRef.current.scrollLeft;
+            const targetScroll = currentScroll + scrollShift;
+
+            setZoom(newZoom);
+
+            // We need to apply scroll AFTER the render updates the width
+            // Store the target scroll to be applied in useLayoutEffect
+            requestAnimationFrame(() => {
+                 if (scrollContainerRef.current) {
+                     scrollContainerRef.current.scrollLeft = targetScroll;
+                 }
+            });
+        }
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,82 +313,88 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* Timeline Track */}
-      <div className="relative flex-1 px-4 py-6 overflow-hidden bg-gray-900">
-        <div 
-            ref={timelineRef}
-            className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
-            onMouseDown={handleTimelineMouseDown}
-        >
-            {/* Waveform Canvas */}
-            <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full opacity-50 pointer-events-none"
-            />
-
-            {/* Grid Lines */}
-            <div className="absolute inset-0 flex pointer-events-none">
-                {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
-                ))}
-            </div>
-
-            {/* Keyframe Markers */}
-            {keyframes.map((kf) => (
-                <div
-                    key={kf.id}
-                    className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
-                        ${draggingKeyframeId === kf.id ? 'z-30' : ''}
-                    `}
-                    style={{ left: `${(kf.timestamp / duration) * 100}%` }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        setDraggingKeyframeId(kf.id);
-                    }}
-                    title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
-                >
-                    {/* Top Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                    
-                    {/* Line */}
-                    <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
-
-                    {/* Bottom Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                </div>
-            ))}
-
-            {/* Playhead */}
+      {/* Timeline Track Container - handles scrolling */}
+      <div
+        ref={scrollContainerRef}
+        className="relative flex-1 px-4 py-6 overflow-x-auto overflow-y-hidden bg-gray-900"
+        onWheel={handleWheel}
+      >
+        <div className="min-w-full h-full relative" style={{ width: `${zoom * 100}%` }}>
             <div
-                className={`absolute top-0 bottom-0 z-40 cursor-grab active:cursor-grabbing -ml-px group/playhead`}
-                style={{ left: `${(currentTime / duration) * 100}%` }}
-                onMouseDown={(e) => {
-                    e.stopPropagation(); // Prevent jumping
-                    setIsDraggingScrubber(true);
-                }}
+                ref={timelineRef}
+                className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
+                onMouseDown={handleTimelineMouseDown}
             >
-                {/* Hitbox for easier grabbing */}
-                <div className="absolute -left-3 -right-3 top-0 bottom-0 bg-transparent" />
-                
-                {/* Visual Line */}
-                <div className="w-0.5 h-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] relative">
-                     {/* Head Handle */}
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm shadow-md flex items-center justify-center z-50 hover:scale-110 transition-transform">
-                        <div className="w-2 h-0.5 bg-red-200 rounded-full" />
+                {/* Waveform Canvas */}
+                <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 w-full h-full opacity-50 pointer-events-none"
+                />
+
+                {/* Grid Lines */}
+                <div className="absolute inset-0 flex pointer-events-none">
+                    {Array.from({ length: 12 * Math.ceil(zoom) }).map((_, i) => (
+                        <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
+                    ))}
+                </div>
+
+                {/* Keyframe Markers */}
+                {keyframes.map((kf) => (
+                    <div
+                        key={kf.id}
+                        className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
+                            ${draggingKeyframeId === kf.id ? 'z-30' : ''}
+                        `}
+                        style={{ left: `${(kf.timestamp / duration) * 100}%` }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setDraggingKeyframeId(kf.id);
+                        }}
+                        title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
+                    >
+                        {/* Top Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+
+                        {/* Line */}
+                        <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
+
+                        {/* Bottom Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+                    </div>
+                ))}
+
+                {/* Playhead */}
+                <div
+                    className={`absolute top-0 bottom-0 z-40 cursor-grab active:cursor-grabbing -ml-px group/playhead`}
+                    style={{ left: `${(currentTime / duration) * 100}%` }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation(); // Prevent jumping
+                        setIsDraggingScrubber(true);
+                    }}
+                >
+                    {/* Hitbox for easier grabbing */}
+                    <div className="absolute -left-3 -right-3 top-0 bottom-0 bg-transparent" />
+                    
+                    {/* Visual Line */}
+                    <div className="w-0.5 h-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] relative">
+                        {/* Head Handle */}
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm shadow-md flex items-center justify-center z-50 hover:scale-110 transition-transform">
+                            <div className="w-2 h-0.5 bg-red-200 rounded-full" />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        {/* Time Scale Labels */}
-        <div className="flex justify-between mt-1 text-[10px] text-gray-500 font-mono px-0.5">
-            <span>0s</span>
-            <span>{formatTime(duration / 2)}</span>
-            <span>{formatTime(duration)}</span>
+
+            {/* Time Scale Labels */}
+            <div className="flex justify-between mt-1 text-[10px] text-gray-500 font-mono px-0.5">
+                <span>0s</span>
+                <span>{formatTime(duration / 2)}</span>
+                <span>{formatTime(duration)}</span>
+            </div>
         </div>
       </div>
     </div>
