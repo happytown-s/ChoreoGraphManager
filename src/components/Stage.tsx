@@ -334,6 +334,12 @@ const Stage = forwardRef<StageRef, StageProps>(({
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+      // Prevent browser zoom or other side effects if this component handles it
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
       if (draggedDancerId) return;
       const zoomIntensity = 0.001;
       const newScale = Math.min(5, Math.max(0.1, transform.k * (1 - e.deltaY * zoomIntensity)));

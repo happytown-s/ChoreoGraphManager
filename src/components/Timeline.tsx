@@ -45,6 +45,9 @@ const Timeline: React.FC<TimelineProps> = ({
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const [zoom, setZoom] = useState(1);
 
+  // Touch states for zoom
+  const [touchDist, setTouchDist] = useState<number | null>(null);
+
   const [_, setResizeTrigger] = useState(0);
 
   // Global Mouse Up to stop dragging anything
@@ -133,7 +136,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
-  }, [audioBuffer, duration, zoom, _]); // Added zoom to dependencies
+  }, [audioBuffer, duration, zoom, _]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // Only Left Click
@@ -153,36 +156,76 @@ const Timeline: React.FC<TimelineProps> = ({
       }
   };
 
-  // Zoom Logic
+  const applyZoom = (newZoom: number) => {
+    if (newZoom !== zoom && scrollContainerRef.current) {
+        const containerWidth = scrollContainerRef.current.clientWidth;
+        const ratio = currentTime / duration;
+        const scrollShift = ratio * containerWidth * (newZoom - zoom);
+        const currentScroll = scrollContainerRef.current.scrollLeft;
+        const targetScroll = currentScroll + scrollShift;
+
+        setZoom(newZoom);
+
+        requestAnimationFrame(() => {
+             if (scrollContainerRef.current) {
+                 scrollContainerRef.current.scrollLeft = targetScroll;
+             }
+        });
+    }
+  };
+
+  // Wheel Zoom Logic
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey) {
         e.preventDefault();
         const delta = -e.deltaY;
         const scaleAmount = 0.1;
         const newZoom = Math.max(1, zoom + (delta > 0 ? scaleAmount : -scaleAmount));
-
-        if (newZoom !== zoom && scrollContainerRef.current) {
-            const containerWidth = scrollContainerRef.current.clientWidth;
-            // Calculate how much the content under the playhead moves
-            // Playhead position ratio (0 to 1)
-            const ratio = currentTime / duration;
-            // Shift = ratio * width * (newZoom - oldZoom)
-            const scrollShift = ratio * containerWidth * (newZoom - zoom);
-
-            const currentScroll = scrollContainerRef.current.scrollLeft;
-            const targetScroll = currentScroll + scrollShift;
-
-            setZoom(newZoom);
-
-            // We need to apply scroll AFTER the render updates the width
-            // Store the target scroll to be applied in useLayoutEffect
-            requestAnimationFrame(() => {
-                 if (scrollContainerRef.current) {
-                     scrollContainerRef.current.scrollLeft = targetScroll;
-                 }
-            });
-        }
+        applyZoom(newZoom);
     }
+  };
+
+  // Touch Zoom Logic (Pinch)
+  const handleTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dist = Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
+          setTouchDist(dist);
+      }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (e.touches.length === 2 && touchDist !== null) {
+          // Prevent browser zoom logic if any
+          e.preventDefault();
+
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dist = Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
+
+          // Determine scale factor
+          // We dampen it a bit or map ratio directly
+          const scale = dist / touchDist;
+          // Apply scale to current zoom
+          // We need to be careful not to exponentialize too fast if this event fires rapidly with same base
+          // Actually, we should use the initial dist as base if we had a "startZoom".
+          // But here we rely on differential updates which is risky.
+          // Better approach: Calculate new zoom based on ratio * currentZoom, then update currentZoom
+          // But React state is async.
+          // Simple additive approach for stability:
+          const diff = dist - touchDist;
+          // 1px diff -> 0.01 zoom change
+          const zoomChange = diff * 0.01;
+          const newZoom = Math.max(1, zoom + zoomChange);
+
+          applyZoom(newZoom);
+          setTouchDist(dist); // Update dist so next move is relative to this
+      }
+  };
+
+  const handleTouchEnd = () => {
+      setTouchDist(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -316,8 +359,12 @@ const Timeline: React.FC<TimelineProps> = ({
       {/* Timeline Track Container - handles scrolling */}
       <div
         ref={scrollContainerRef}
-        className="relative flex-1 px-4 py-6 overflow-x-auto overflow-y-hidden bg-gray-900"
+        className="relative flex-1 px-4 py-6 overflow-x-auto overflow-y-hidden bg-gray-900 touch-pan-x"
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <div className="min-w-full h-full relative" style={{ width: `${zoom * 100}%` }}>
             <div

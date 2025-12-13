@@ -635,7 +635,7 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden touch-none">
       {/* Hidden Audio Element with crossOrigin */}
       <audio 
         ref={audioRef} 
@@ -720,7 +720,7 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative min-h-0">
-          <div className={`absolute top-0 bottom-0 left-0 bg-gray-900 border-r border-gray-800 z-20 transition-all duration-300 ease-in-out flex flex-col shadow-2xl ${isSidebarOpen ? 'w-full sm:w-72 translate-x-0' : 'w-72 -translate-x-full'}`}>
+          <div className={`absolute top-0 bottom-0 left-0 bg-gray-900 border-r border-gray-800 z-20 transition-all duration-300 ease-in-out flex flex-col shadow-2xl touch-pan-y ${isSidebarOpen ? 'w-full sm:w-72 translate-x-0' : 'w-72 -translate-x-full'}`}>
             <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                 <h2 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Cast</h2>
                 <div className="flex items-center space-x-1">
