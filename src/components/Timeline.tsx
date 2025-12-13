@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Keyframe } from '../types';
-import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface TimelineProps {
   duration: number;
@@ -45,6 +45,21 @@ const Timeline: React.FC<TimelineProps> = ({
 
   const [_, setResizeTrigger] = useState(0);
 
+  // Zoom and Scroll State
+  const [zoom, setZoom] = useState(1); // 1 = 100% (fit), >1 = Zoomed In
+  const [scrollLeft, setScrollLeft] = useState(0); // Time in ms
+
+  // Derived values
+  const visibleDuration = duration / zoom;
+
+  // Clamp scrollLeft when duration or zoom changes
+  useEffect(() => {
+    const maxScroll = Math.max(0, duration - visibleDuration);
+    if (scrollLeft > maxScroll) {
+        setScrollLeft(maxScroll);
+    }
+  }, [duration, visibleDuration, scrollLeft]);
+
   // Global Mouse Up to stop dragging anything
   useEffect(() => {
     const handleUp = () => {
@@ -55,8 +70,11 @@ const Timeline: React.FC<TimelineProps> = ({
         if (!timelineRef.current) return;
         const rect = timelineRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        const percentage = Math.max(0, Math.min(1, x / rect.width));
-        const newTime = Math.round(percentage * duration);
+
+        // Map x to time
+        const timeOffset = (x / rect.width) * visibleDuration;
+        const rawTime = scrollLeft + timeOffset;
+        const newTime = Math.max(0, Math.min(duration, Math.round(rawTime)));
 
         if (draggingKeyframeId) {
             onUpdateKeyframeTime(draggingKeyframeId, newTime);
@@ -73,7 +91,7 @@ const Timeline: React.FC<TimelineProps> = ({
         window.removeEventListener('mouseup', handleUp);
         window.removeEventListener('mousemove', handleMove);
     };
-  }, [draggingKeyframeId, isDraggingScrubber, duration, onUpdateKeyframeTime, onSeek]);
+  }, [draggingKeyframeId, isDraggingScrubber, duration, onUpdateKeyframeTime, onSeek, scrollLeft, visibleDuration]);
 
   // Handle Resize for Canvas
   useEffect(() => {
@@ -104,33 +122,49 @@ const Timeline: React.FC<TimelineProps> = ({
     const width = canvas.width;
     const height = canvas.height;
     const centerY = height / 2;
+    const amp = height / 2;
 
     const data = audioBuffer.getChannelData(0);
-    // duration (ms) -> samples: audioBuffer.sampleRate * (duration / 1000)
-    // We only want to draw up to `duration`, not the whole file if it's longer
-    const totalSamplesToDraw = Math.floor(audioBuffer.sampleRate * (duration / 1000));
-    const step = Math.ceil(totalSamplesToDraw / width);
-    const amp = height / 2;
+
+    // Calculate sample range for visible area
+    const startSample = Math.floor(audioBuffer.sampleRate * (scrollLeft / 1000));
+    const endSample = Math.floor(audioBuffer.sampleRate * ((scrollLeft + visibleDuration) / 1000));
+    // Check bounds
+    const safeStartSample = Math.max(0, startSample);
+    const safeEndSample = Math.min(data.length, endSample);
+
+    const totalSamplesInView = safeEndSample - safeStartSample;
+    // Samples per pixel
+    const step = Math.ceil((endSample - startSample) / width);
 
     ctx.fillStyle = '#4f46e5'; // Indigo-600
     ctx.beginPath();
 
     for (let i = 0; i < width; i++) {
+        const currentSampleIndex = startSample + i * step;
+
+        if (currentSampleIndex >= data.length) break;
+        if (currentSampleIndex < 0) continue;
+
         let min = 1.0;
         let max = -1.0;
 
-        const startIndex = i * step;
-        if (startIndex >= data.length) break;
+        const chunkEnd = Math.min(data.length, currentSampleIndex + step);
 
-        for (let j = 0; j < step; j++) {
-            const datum = data[startIndex + j];
+        for (let j = currentSampleIndex; j < chunkEnd; j++) {
+            const datum = data[j];
             if (datum < min) min = datum;
             if (datum > max) max = datum;
         }
 
+        // If no data in range (e.g. slight mismatch), skip
+        if (min > max) {
+             min = 0; max = 0;
+        }
+
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
-  }, [audioBuffer, duration, _]);
+  }, [audioBuffer, duration, _, zoom, scrollLeft, visibleDuration]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // Only Left Click
@@ -145,9 +179,72 @@ const Timeline: React.FC<TimelineProps> = ({
       if (timelineRef.current) {
         const rect = timelineRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        const percentage = Math.max(0, Math.min(1, x / rect.width));
-        onSeek(percentage * duration);
+
+        const timeOffset = (x / rect.width) * visibleDuration;
+        const rawTime = scrollLeft + timeOffset;
+        const newTime = Math.max(0, Math.min(duration, rawTime));
+
+        onSeek(newTime);
       }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+
+    if (e.ctrlKey || e.metaKey) {
+        // Zoom
+        e.preventDefault();
+
+        // Calculate time at mouse pointer to keep it focused
+        const x = e.clientX - rect.left;
+        const timeAtMouse = scrollLeft + (x / rect.width) * visibleDuration;
+
+        // Zoom sensitivity
+        const zoomFactor = 1.1;
+        let newZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
+
+        // Clamp Zoom
+        newZoom = Math.max(1, Math.min(100, newZoom));
+
+        const newVisibleDuration = duration / newZoom;
+
+        // Adjust scrollLeft to keep timeAtMouse in same pixel position
+        // newScrollLeft + (x/width) * newVisibleDuration = timeAtMouse
+        let newScrollLeft = timeAtMouse - (x / rect.width) * newVisibleDuration;
+
+        // Clamp scroll
+        newScrollLeft = Math.max(0, Math.min(duration - newVisibleDuration, newScrollLeft));
+
+        setZoom(newZoom);
+        setScrollLeft(newScrollLeft);
+
+    } else {
+        // Scroll (Pan)
+        // Horizontal scroll usually comes as deltaX, but mouse wheel is deltaY
+        const delta = e.shiftKey ? e.deltaY : (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+
+        // Pan amount in pixels
+        const timeDelta = (delta / rect.width) * visibleDuration;
+
+        let newScrollLeft = scrollLeft + timeDelta;
+
+        // Clamp
+        newScrollLeft = Math.max(0, Math.min(duration - visibleDuration, newScrollLeft));
+        setScrollLeft(newScrollLeft);
+    }
+  };
+
+  const handleZoomIn = () => {
+     setZoom(prev => Math.min(100, prev * 1.2));
+  };
+
+  const handleZoomOut = () => {
+      setZoom(prev => {
+          const newZoom = Math.max(1, prev / 1.2);
+          if (newZoom === 1) setScrollLeft(0);
+          return newZoom;
+      });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,6 +352,16 @@ const Timeline: React.FC<TimelineProps> = ({
                 />
                 <span className="text-xs text-gray-400 ml-1">s</span>
             </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center bg-gray-900 rounded-lg px-1 py-1 border border-gray-700 space-x-0.5">
+                <button onClick={handleZoomOut} className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800" title="Zoom Out (Ctrl+Wheel)">
+                    <ZoomOut size={14} />
+                </button>
+                 <button onClick={handleZoomIn} className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-800" title="Zoom In (Ctrl+Wheel)">
+                    <ZoomIn size={14} />
+                </button>
+            </div>
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
@@ -282,8 +389,9 @@ const Timeline: React.FC<TimelineProps> = ({
       <div className="relative flex-1 px-4 py-6 overflow-hidden bg-gray-900">
         <div 
             ref={timelineRef}
-            className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
+            className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group overflow-hidden"
             onMouseDown={handleTimelineMouseDown}
+            onWheel={handleWheel}
         >
             {/* Waveform Canvas */}
             <canvas
@@ -299,38 +407,46 @@ const Timeline: React.FC<TimelineProps> = ({
             </div>
 
             {/* Keyframe Markers */}
-            {keyframes.map((kf) => (
-                <div
-                    key={kf.id}
-                    className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
-                        ${draggingKeyframeId === kf.id ? 'z-30' : ''}
-                    `}
-                    style={{ left: `${(kf.timestamp / duration) * 100}%` }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        setDraggingKeyframeId(kf.id);
-                    }}
-                    title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
-                >
-                    {/* Top Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                    
-                    {/* Line */}
-                    <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
+            {keyframes.map((kf) => {
+                const leftPercent = ((kf.timestamp - scrollLeft) / visibleDuration) * 100;
+                if (leftPercent < -5 || leftPercent > 105) return null; // Hide if out of view
 
-                    {/* Bottom Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                </div>
-            ))}
+                return (
+                    <div
+                        key={kf.id}
+                        className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
+                            ${draggingKeyframeId === kf.id ? 'z-30' : ''}
+                        `}
+                        style={{ left: `${leftPercent}%` }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setDraggingKeyframeId(kf.id);
+                        }}
+                        title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
+                    >
+                        {/* Top Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+
+                        {/* Line */}
+                        <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
+
+                        {/* Bottom Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+                    </div>
+                );
+            })}
 
             {/* Playhead */}
             <div
                 className={`absolute top-0 bottom-0 z-40 cursor-grab active:cursor-grabbing -ml-px group/playhead`}
-                style={{ left: `${(currentTime / duration) * 100}%` }}
+                style={{
+                    left: `${((currentTime - scrollLeft) / visibleDuration) * 100}%`,
+                    display: (currentTime < scrollLeft || currentTime > scrollLeft + visibleDuration) ? 'none' : 'block'
+                }}
                 onMouseDown={(e) => {
                     e.stopPropagation(); // Prevent jumping
                     setIsDraggingScrubber(true);
@@ -351,9 +467,9 @@ const Timeline: React.FC<TimelineProps> = ({
         
         {/* Time Scale Labels */}
         <div className="flex justify-between mt-1 text-[10px] text-gray-500 font-mono px-0.5">
-            <span>0s</span>
-            <span>{formatTime(duration / 2)}</span>
-            <span>{formatTime(duration)}</span>
+            <span>{formatTime(scrollLeft)}</span>
+            <span>{formatTime(scrollLeft + visibleDuration / 2)}</span>
+            <span>{formatTime(scrollLeft + visibleDuration)}</span>
         </div>
       </div>
     </div>
