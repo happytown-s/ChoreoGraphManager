@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState, useEffect, useLayoutEffect } from 'react';
 import { Keyframe } from '../types';
 import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music } from 'lucide-react';
 
@@ -47,8 +47,17 @@ const Timeline: React.FC<TimelineProps> = ({
 
   // Touch states for zoom
   const [touchDist, setTouchDist] = useState<number | null>(null);
+  const pendingScrollRef = useRef<number | null>(null);
 
   const [_, setResizeTrigger] = useState(0);
+
+  // Apply pending scroll synchronously after layout update
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current !== null && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollLeft = pendingScrollRef.current;
+        pendingScrollRef.current = null;
+    }
+  }, [zoom]);
 
   // Global Mouse Up to stop dragging anything
   useEffect(() => {
@@ -164,13 +173,8 @@ const Timeline: React.FC<TimelineProps> = ({
         const currentScroll = scrollContainerRef.current.scrollLeft;
         const targetScroll = currentScroll + scrollShift;
 
+        pendingScrollRef.current = targetScroll;
         setZoom(newZoom);
-
-        requestAnimationFrame(() => {
-             if (scrollContainerRef.current) {
-                 scrollContainerRef.current.scrollLeft = targetScroll;
-             }
-        });
     }
   };
 
