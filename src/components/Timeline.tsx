@@ -1,6 +1,6 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState, useEffect, useLayoutEffect } from 'react';
 import { Keyframe } from '../types';
-import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface TimelineProps {
   duration: number;
@@ -38,12 +38,29 @@ const Timeline: React.FC<TimelineProps> = ({
   audioBuffer
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggingKeyframeId, setDraggingKeyframeId] = useState<string | null>(null);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 20;
+
+  // Touch states for zoom
+  const [touchDist, setTouchDist] = useState<number | null>(null);
+  const pendingScrollRef = useRef<number | null>(null);
 
   const [_, setResizeTrigger] = useState(0);
+
+  // Apply pending scroll synchronously after layout update
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current !== null && scrollContainerRef.current) {
+        scrollContainerRef.current.scrollLeft = pendingScrollRef.current;
+        pendingScrollRef.current = null;
+    }
+  }, [zoom]);
 
   // Global Mouse Up to stop dragging anything
   useEffect(() => {
@@ -94,8 +111,9 @@ const Timeline: React.FC<TimelineProps> = ({
 
     // Canvas size sync
     const rect = timelineRef.current.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    // Prevent 0 width canvas errors
+    canvas.width = Math.max(1, rect.width);
+    canvas.height = Math.max(1, rect.height);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -130,7 +148,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
     }
-  }, [audioBuffer, duration, _]);
+  }, [audioBuffer, duration, zoom, _]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
       // Only Left Click
@@ -148,6 +166,71 @@ const Timeline: React.FC<TimelineProps> = ({
         const percentage = Math.max(0, Math.min(1, x / rect.width));
         onSeek(percentage * duration);
       }
+  };
+
+  const applyZoom = (targetZoom: number) => {
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+
+    if (newZoom !== zoom && scrollContainerRef.current) {
+        const containerWidth = scrollContainerRef.current.clientWidth;
+        const ratio = currentTime / duration;
+        const scrollShift = ratio * containerWidth * (newZoom - zoom);
+        const currentScroll = scrollContainerRef.current.scrollLeft;
+        const targetScroll = currentScroll + scrollShift;
+
+        pendingScrollRef.current = targetScroll;
+        setZoom(newZoom);
+    }
+  };
+
+  // Wheel Zoom Logic
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = -e.deltaY;
+        const scaleAmount = 0.1;
+        applyZoom(zoom + (delta > 0 ? scaleAmount : -scaleAmount));
+    }
+  };
+
+  // Touch Zoom Logic (Pinch)
+  const handleTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dist = Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
+          setTouchDist(dist);
+      }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (e.touches.length === 2 && touchDist !== null) {
+          // Prevent browser zoom logic if any
+          e.preventDefault();
+
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dist = Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
+
+          const diff = dist - touchDist;
+          // 1px diff -> 0.01 zoom change
+          const zoomChange = diff * 0.01;
+
+          applyZoom(zoom + zoomChange);
+          setTouchDist(dist); // Update dist so next move is relative to this
+      }
+  };
+
+  const handleTouchEnd = () => {
+      setTouchDist(null);
+  };
+
+  const handleZoomIn = () => {
+    applyZoom(Math.floor(zoom * 2) / 2 + 0.5); // Steps of 0.5
+  };
+
+  const handleZoomOut = () => {
+    applyZoom(Math.ceil(zoom * 2) / 2 - 0.5);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -258,6 +341,26 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
+             {/* Zoom Buttons */}
+             <div className="flex items-center bg-gray-900 rounded-lg border border-gray-700 p-0.5">
+                <button
+                    onClick={handleZoomOut}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
+                    title="Zoom Out"
+                    disabled={zoom <= MIN_ZOOM}
+                >
+                    <ZoomOut size={16} />
+                </button>
+                <button
+                    onClick={handleZoomIn}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
+                    title="Zoom In"
+                    disabled={zoom >= MAX_ZOOM}
+                >
+                    <ZoomIn size={16} />
+                </button>
+             </div>
+
             {activeKeyframe ? (
                  <button
                  onClick={() => onDeleteKeyframe(activeKeyframe.id)}
@@ -278,82 +381,92 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* Timeline Track */}
-      <div className="relative flex-1 px-4 py-6 overflow-hidden bg-gray-900">
-        <div 
-            ref={timelineRef}
-            className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
-            onMouseDown={handleTimelineMouseDown}
-        >
-            {/* Waveform Canvas */}
-            <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full opacity-50 pointer-events-none"
-            />
-
-            {/* Grid Lines */}
-            <div className="absolute inset-0 flex pointer-events-none">
-                {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
-                ))}
-            </div>
-
-            {/* Keyframe Markers */}
-            {keyframes.map((kf) => (
-                <div
-                    key={kf.id}
-                    className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
-                        ${draggingKeyframeId === kf.id ? 'z-30' : ''}
-                    `}
-                    style={{ left: `${(kf.timestamp / duration) * 100}%` }}
-                    onMouseDown={(e) => {
-                        e.stopPropagation();
-                        setDraggingKeyframeId(kf.id);
-                    }}
-                    title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
-                >
-                    {/* Top Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                    
-                    {/* Line */}
-                    <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
-
-                    {/* Bottom Diamond */}
-                    <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
-                         ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
-                    `} />
-                </div>
-            ))}
-
-            {/* Playhead */}
+      {/* Timeline Track Container - handles scrolling */}
+      <div
+        ref={scrollContainerRef}
+        className="relative flex-1 px-4 py-6 overflow-x-auto overflow-y-hidden bg-gray-900 touch-pan-x"
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        <div className="min-w-full h-full relative" style={{ width: `${zoom * 100}%` }}>
             <div
-                className={`absolute top-0 bottom-0 z-40 cursor-grab active:cursor-grabbing -ml-px group/playhead`}
-                style={{ left: `${(currentTime / duration) * 100}%` }}
-                onMouseDown={(e) => {
-                    e.stopPropagation(); // Prevent jumping
-                    setIsDraggingScrubber(true);
-                }}
+                ref={timelineRef}
+                className="relative w-full h-12 bg-gray-950 rounded border border-gray-800 cursor-pointer group"
+                onMouseDown={handleTimelineMouseDown}
             >
-                {/* Hitbox for easier grabbing */}
-                <div className="absolute -left-3 -right-3 top-0 bottom-0 bg-transparent" />
-                
-                {/* Visual Line */}
-                <div className="w-0.5 h-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] relative">
-                     {/* Head Handle */}
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm shadow-md flex items-center justify-center z-50 hover:scale-110 transition-transform">
-                        <div className="w-2 h-0.5 bg-red-200 rounded-full" />
+                {/* Waveform Canvas */}
+                <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 w-full h-full opacity-50 pointer-events-none"
+                />
+
+                {/* Grid Lines */}
+                <div className="absolute inset-0 flex pointer-events-none">
+                    {Array.from({ length: 12 * Math.ceil(zoom) }).map((_, i) => (
+                        <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
+                    ))}
+                </div>
+
+                {/* Keyframe Markers */}
+                {keyframes.map((kf) => (
+                    <div
+                        key={kf.id}
+                        className={`keyframe-marker absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize z-20 group/marker flex flex-col items-center justify-center
+                            ${draggingKeyframeId === kf.id ? 'z-30' : ''}
+                        `}
+                        style={{ left: `${(kf.timestamp / duration) * 100}%` }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setDraggingKeyframeId(kf.id);
+                        }}
+                        title={`Drag to move keyframe (${formatTime(kf.timestamp)})`}
+                    >
+                        {/* Top Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+
+                        {/* Line */}
+                        <div className={`w-0.5 flex-1 ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400/50' : 'bg-blue-500/50'}`} />
+
+                        {/* Bottom Diamond */}
+                        <div className={`w-3 h-3 rotate-45 transform transition-all duration-75 shadow-sm
+                            ${activeKeyframe?.id === kf.id || draggingKeyframeId === kf.id ? 'bg-yellow-400 scale-125' : 'bg-blue-500 hover:bg-blue-400'}
+                        `} />
+                    </div>
+                ))}
+
+                {/* Playhead */}
+                <div
+                    className={`absolute top-0 bottom-0 z-40 cursor-grab active:cursor-grabbing -ml-px group/playhead`}
+                    style={{ left: `${(currentTime / duration) * 100}%` }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation(); // Prevent jumping
+                        setIsDraggingScrubber(true);
+                    }}
+                >
+                    {/* Hitbox for easier grabbing */}
+                    <div className="absolute -left-3 -right-3 top-0 bottom-0 bg-transparent" />
+                    
+                    {/* Visual Line */}
+                    <div className="w-0.5 h-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] relative">
+                        {/* Head Handle */}
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm shadow-md flex items-center justify-center z-50 hover:scale-110 transition-transform">
+                            <div className="w-2 h-0.5 bg-red-200 rounded-full" />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        {/* Time Scale Labels */}
-        <div className="flex justify-between mt-1 text-[10px] text-gray-500 font-mono px-0.5">
-            <span>0s</span>
-            <span>{formatTime(duration / 2)}</span>
-            <span>{formatTime(duration)}</span>
+
+            {/* Time Scale Labels */}
+            <div className="flex justify-between mt-1 text-[10px] text-gray-500 font-mono px-0.5">
+                <span>0s</span>
+                <span>{formatTime(duration / 2)}</span>
+                <span>{formatTime(duration)}</span>
+            </div>
         </div>
       </div>
     </div>
