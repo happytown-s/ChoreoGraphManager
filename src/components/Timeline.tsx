@@ -148,7 +148,7 @@ const Timeline: React.FC<TimelineProps> = ({
     // duration (ms) -> samples: audioBuffer.sampleRate * (duration / 1000)
     // We only want to draw up to `duration`, not the whole file if it's longer
     const totalSamplesToDraw = Math.floor(audioBuffer.sampleRate * (duration / 1000));
-    const step = Math.ceil(totalSamplesToDraw / width);
+    const samplesPerPixel = totalSamplesToDraw / width;
     const amp = height / 2;
 
     ctx.fillStyle = '#4f46e5'; // Indigo-600
@@ -158,13 +158,25 @@ const Timeline: React.FC<TimelineProps> = ({
         let min = 1.0;
         let max = -1.0;
 
-        const startIndex = i * step;
+        const startIndex = Math.floor(i * samplesPerPixel);
+        const endIndex = Math.floor((i + 1) * samplesPerPixel);
+        // Ensure we inspect at least one sample even if zoomed in deeply
+        const loopEnd = Math.max(startIndex + 1, endIndex);
+
         if (startIndex >= data.length) break;
 
-        for (let j = 0; j < step; j++) {
-            const datum = data[startIndex + j];
+        for (let j = startIndex; j < loopEnd; j++) {
+            if (j >= data.length) break;
+            const datum = data[j];
             if (datum < min) min = datum;
             if (datum > max) max = datum;
+        }
+
+        // If we found no data (e.g. range was empty and start was out of bounds - though checked above),
+        // or just to be safe if min > max because loop didn't run (unlikely with logic above)
+        if (min > max) {
+            min = 0;
+            max = 0;
         }
 
         ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
