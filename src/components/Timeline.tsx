@@ -62,6 +62,27 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   }, [zoom]);
 
+  // Auto-scroll to keep playhead in view
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const containerWidth = container.clientWidth;
+    const contentWidth = container.scrollWidth;
+    const playheadX = (currentTime / duration) * contentWidth;
+
+    const scrollLeft = container.scrollLeft;
+    const rightEdge = scrollLeft + containerWidth;
+    const leftEdge = scrollLeft;
+
+    // If playhead is out of view (with a small buffer), scroll to center it
+    const buffer = 20;
+
+    if (playheadX > rightEdge - buffer || playheadX < leftEdge + buffer) {
+        container.scrollLeft = playheadX - (containerWidth / 2);
+    }
+  }, [currentTime, duration]);
+
   // Global Mouse Up to stop dragging anything
   useEffect(() => {
     const handleUp = () => {
