@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Dancer, Keyframe, Position, STAGE_WIDTH, STAGE_HEIGHT } from './types';
 import Timeline from './components/Timeline';
 import Stage, { StageRef } from './components/Stage';
@@ -128,9 +128,14 @@ function App() {
       }
   }, [isPlaying, audioFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Memoize sorted keyframes to avoid sorting on every frame
+  const sortedKeyframes = useMemo(() => {
+    return [...keyframes].sort((a, b) => a.timestamp - b.timestamp);
+  }, [keyframes]);
+
   // Interpolation Logic
   const getCurrentPositions = useCallback((): Record<string, Position> => {
-    const sorted = [...keyframes].sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = sortedKeyframes;
     let prevKf = sorted[0];
     let nextKf = sorted[sorted.length - 1];
     
@@ -160,7 +165,7 @@ function App() {
       };
     });
     return interpolated;
-  }, [currentTime, keyframes, dancers]);
+  }, [currentTime, sortedKeyframes, dancers]);
 
   const currentPositions = getCurrentPositions();
 
@@ -326,13 +331,13 @@ function App() {
   };
 
   const handleJumpNextKeyframe = () => {
-      const sorted = [...keyframes].sort((a, b) => a.timestamp - b.timestamp);
+      const sorted = sortedKeyframes;
       const next = sorted.find(k => k.timestamp > currentTime + 50);
       handleSeek(next ? next.timestamp : 0);
   };
 
   const handleJumpPrevKeyframe = () => {
-      const sorted = [...keyframes].sort((a, b) => a.timestamp - b.timestamp);
+      const sorted = sortedKeyframes;
       const prevs = sorted.filter(k => k.timestamp < currentTime - 50);
       handleSeek(prevs.length ? prevs[prevs.length - 1].timestamp : 0);
   };
