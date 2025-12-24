@@ -1,6 +1,7 @@
 import React, { useRef, useMemo, useState, useEffect, useLayoutEffect } from 'react';
 import { Keyframe } from '../types';
 import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music, ZoomIn, ZoomOut } from 'lucide-react';
+import WaveformWorker from '../workers/waveform.worker?worker';
 
 interface TimelineProps {
   duration: number;
@@ -53,6 +54,29 @@ const Timeline: React.FC<TimelineProps> = ({
   const pendingScrollRef = useRef<number | null>(null);
 
   const [_, setResizeTrigger] = useState(0);
+
+  // Worker reference
+  const workerRef = useRef<Worker | null>(null);
+  const workerReqIdRef = useRef(0);
+
+  // Initialize Worker
+  useEffect(() => {
+    workerRef.current = new WaveformWorker();
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  // Sync Audio Data to Worker
+  useEffect(() => {
+    if (!audioBuffer || !workerRef.current) return;
+    const channelData = audioBuffer.getChannelData(0);
+    // Clone logic handled by postMessage
+    workerRef.current.postMessage({
+      type: 'SET_AUDIO',
+      payload: { data: channelData }
+    });
+  }, [audioBuffer]);
 
   // Apply pending scroll synchronously after layout update
   useLayoutEffect(() => {
@@ -125,62 +149,79 @@ const Timeline: React.FC<TimelineProps> = ({
   // Waveform Rendering
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !timelineRef.current) return;
+    if (!canvas || !timelineRef.current || !workerRef.current) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
     // Canvas size sync
     const rect = timelineRef.current.getBoundingClientRect();
-    // Prevent 0 width canvas errors
-    canvas.width = Math.max(1, rect.width);
-    canvas.height = Math.max(1, rect.height);
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Only update canvas dimensions if they changed (avoids flickering)
+    if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+    }
+
+    // Clear immediately
+    ctx.clearRect(0, 0, width, height);
 
     if (!audioBuffer) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerY = height / 2;
-
-    const data = audioBuffer.getChannelData(0);
-    // duration (ms) -> samples: audioBuffer.sampleRate * (duration / 1000)
-    // We only want to draw up to `duration`, not the whole file if it's longer
     const totalSamplesToDraw = Math.floor(audioBuffer.sampleRate * (duration / 1000));
     const samplesPerPixel = totalSamplesToDraw / width;
-    const amp = height / 2;
 
-    ctx.fillStyle = '#4f46e5'; // Indigo-600
-    ctx.beginPath();
+    // Request ID to ignore stale responses
+    const reqId = ++workerReqIdRef.current;
 
-    for (let i = 0; i < width; i++) {
-        let min = 1.0;
-        let max = -1.0;
+    const handleMessage = (e: MessageEvent) => {
+        const { id, mins, maxs } = e.data;
+        if (id !== reqId) return;
 
-        const startIndex = Math.floor(i * samplesPerPixel);
-        const endIndex = Math.floor((i + 1) * samplesPerPixel);
-        // Ensure we inspect at least one sample even if zoomed in deeply
-        const loopEnd = Math.max(startIndex + 1, endIndex);
+        // Drawing Phase
+        // Ensure ctx is still valid and canvas size matches request?
+        // If resize happened, we might have a new request pending.
+        // We just draw what we got.
 
-        if (startIndex >= data.length) break;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#4f46e5'; // Indigo-600
+        const centerY = height / 2;
+        const amp = height / 2;
 
-        for (let j = startIndex; j < loopEnd; j++) {
-            if (j >= data.length) break;
-            const datum = data[j];
-            if (datum < min) min = datum;
-            if (datum > max) max = datum;
+        // Batch drawing using path for performance?
+        // fillRect loop is okay, but path is better for many small rects.
+        // However, individual rects allow pixel-perfect columns.
+        // Let's stick to fillRect or simple path. Path is faster.
+
+        ctx.beginPath();
+        for (let i = 0; i < mins.length; i++) {
+             const min = mins[i];
+             const max = maxs[i];
+             if (max - min <= 0 && min === 0) continue; // Skip silence/empty
+
+             ctx.rect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
         }
+        ctx.fill();
 
-        // If we found no data (e.g. range was empty and start was out of bounds - though checked above),
-        // or just to be safe if min > max because loop didn't run (unlikely with logic above)
-        if (min > max) {
-            min = 0;
-            max = 0;
+        // Cleanup listener
+        workerRef.current?.removeEventListener('message', handleMessage);
+    };
+
+    workerRef.current.addEventListener('message', handleMessage);
+    workerRef.current.postMessage({
+        type: 'COMPUTE',
+        payload: {
+            id: reqId,
+            width,
+            samplesPerPixel
         }
+    });
 
-        ctx.fillRect(i, centerY + min * amp, 1, Math.max(1, (max - min) * amp));
-    }
+    return () => {
+        workerRef.current?.removeEventListener('message', handleMessage);
+    };
   }, [audioBuffer, duration, zoom, _]);
 
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
