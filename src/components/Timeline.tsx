@@ -285,6 +285,12 @@ const Timeline: React.FC<TimelineProps> = ({
     return keyframes.find(k => Math.abs(k.timestamp - currentTime) < 50);
   }, [keyframes, currentTime]);
 
+  const gridLines = useMemo(() => (
+    Array.from({ length: 12 * Math.ceil(zoom) }).map((_, i) => (
+      <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
+    ))
+  ), [zoom]);
+
   return (
     <div className="flex flex-col h-full bg-gray-900 border-t border-gray-800 select-none">
       {/* Controls Header */}
@@ -438,9 +444,7 @@ const Timeline: React.FC<TimelineProps> = ({
 
                 {/* Grid Lines */}
                 <div className="absolute inset-0 flex pointer-events-none">
-                    {Array.from({ length: 12 * Math.ceil(zoom) }).map((_, i) => (
-                        <div key={i} className="flex-1 border-r border-gray-800 first:border-l h-full opacity-30" />
-                    ))}
+                    {gridLines}
                 </div>
 
                 {/* Keyframe Markers */}
