@@ -49,6 +49,9 @@ const Stage = forwardRef<StageRef, StageProps>(({
   const prevPanPointRef = useRef<{ x: number, y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
 
+  // High-frequency drag state
+  const dragStateRef = useRef<{ id: string, x: number, y: number } | null>(null);
+
   // --- 1. サイズ変更検知（偶数サイズを徹底する） ---
   useEffect(() => {
     const container = containerRef.current;
@@ -216,7 +219,13 @@ const Stage = forwardRef<StageRef, StageProps>(({
 
     // Dancers
     dancers.forEach((dancer) => {
-      const pos = positions[dancer.id] || { x: 0, y: 0 };
+      let pos = positions[dancer.id] || { x: 0, y: 0 };
+
+      // Override if dragging
+      if (dragStateRef.current && dragStateRef.current.id === dancer.id) {
+          pos = { x: dragStateRef.current.x, y: dragStateRef.current.y };
+      }
+
       const isSelected = selectedDancerId === dancer.id;
       const isDragging = draggedDancerId === dancer.id;
       
@@ -416,7 +425,22 @@ const Stage = forwardRef<StageRef, StageProps>(({
         }
         x = Math.max(-WINGS_WIDTH + 20, Math.min(STAGE_WIDTH + WINGS_WIDTH - 20, x));
         y = Math.max(20, Math.min(STAGE_HEIGHT - 20, y));
-        onPositionChange(draggedDancerId, { x, y });
+
+        // Use Ref for transient updates to avoid re-rendering
+        dragStateRef.current = { id: draggedDancerId, x, y };
+
+        // Force manual redraw without state update
+        const canvas = canvasRef.current;
+        if (canvas) {
+             const ctx = canvas.getContext('2d', {
+                alpha: true,
+                willReadFrequently: false,
+                preserveDrawingBuffer: true
+            });
+            if (ctx) {
+                drawScene(ctx, canvas.width, canvas.height, transform);
+            }
+        }
         return;
     }
 
@@ -456,7 +480,13 @@ const Stage = forwardRef<StageRef, StageProps>(({
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     pointersRef.current.delete(e.pointerId);
     (e.target as Element).releasePointerCapture(e.pointerId);
+
     if (pointersRef.current.size === 0) {
+        // Commit drag change
+        if (draggedDancerId && dragStateRef.current && dragStateRef.current.id === draggedDancerId) {
+             onPositionChange(dragStateRef.current.id, { x: dragStateRef.current.x, y: dragStateRef.current.y });
+        }
+        dragStateRef.current = null;
         setDraggedDancerId(null);
         isDraggingViewRef.current = false;
         prevPinchDistRef.current = null;
