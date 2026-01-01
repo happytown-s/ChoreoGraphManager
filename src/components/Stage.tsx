@@ -447,8 +447,8 @@ const Stage = forwardRef<StageRef, StageProps>(({
     if (isDraggingViewRef.current) {
         if (pointersRef.current.size === 2) {
             const values = Array.from(pointersRef.current.values());
-            const p1 = values[0];
-            const p2 = values[1];
+            const p1 = values[0] as { x: number, y: number };
+            const p2 = values[1] as { x: number, y: number };
             const dist = Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
             const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
             
