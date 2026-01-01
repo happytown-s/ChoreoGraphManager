@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Dancer, Position, STAGE_WIDTH, STAGE_HEIGHT } from "../types";
+import { Dancer, Position, STAGE_WIDTH, STAGE_HEIGHT } from "./types";
 
 // Initialize Gemini Client
 // Note: API Key must be set in process.env.API_KEY
