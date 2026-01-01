@@ -238,6 +238,9 @@ function App() {
 
   // 【修正】アップロード時にAudioBufferとしてデコードする
   const handleAudioUpload = async (file: File) => {
+      // 古いURLを解放してメモリリークを防ぐ
+      if (audioFile) URL.revokeObjectURL(audioFile);
+
       const url = URL.createObjectURL(file);
       setAudioFile(url);
       setAudioFileName(file.name);
