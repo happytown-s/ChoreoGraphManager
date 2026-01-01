@@ -69,13 +69,21 @@ const Timeline: React.FC<TimelineProps> = ({
 
   // Sync Audio Data to Worker
   useEffect(() => {
-    if (!audioBuffer || !workerRef.current) return;
-    const channelData = audioBuffer.getChannelData(0);
-    // Clone logic handled by postMessage
-    workerRef.current.postMessage({
-      type: 'SET_AUDIO',
-      payload: { data: channelData }
-    });
+    if (!workerRef.current) return;
+    if (audioBuffer) {
+        const channelData = audioBuffer.getChannelData(0);
+        // Clone logic handled by postMessage
+        workerRef.current.postMessage({
+        type: 'SET_AUDIO',
+        payload: { data: channelData }
+        });
+    } else {
+        // Clear worker data if audio is removed
+        workerRef.current.postMessage({
+            type: 'SET_AUDIO',
+            payload: { data: new Float32Array(0) }
+        });
+    }
   }, [audioBuffer]);
 
   // Apply pending scroll synchronously after layout update
