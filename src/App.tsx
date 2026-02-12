@@ -30,7 +30,7 @@ const isTauri = () => '__TAURI_INTERNALS__' in window;
 function App() {
   // --- State ---
   const [dancers, setDancers] = useState<Dancer[]>(INITIAL_DANCERS);
-  const [selectedDancerId, setSelectedDancerId] = useState<string | null>(null);
+  const [selectedDancerIds, setSelectedDancerIds] = useState<Set<string>>(new Set());
   const [keyframes, setKeyframes] = useState<Keyframe[]>([
     { id: 'start', timestamp: 0, positions: INITIAL_POSITIONS }
   ]);
@@ -282,7 +282,6 @@ function App() {
 
   const handlePositionChange = (dancerId: string, newPos: Position) => {
     setIsPlaying(false);
-    setSelectedDancerId(dancerId);
     setKeyframes(prev => {
       const existingIndex = prev.findIndex(k => Math.abs(k.timestamp - currentTime) < 50);
       if (existingIndex >= 0) {
@@ -297,6 +296,29 @@ function App() {
           id: Date.now().toString(),
           timestamp: currentTime,
           positions: { ...currentPositions, [dancerId]: newPos }
+        };
+        return [...prev, newKf].sort((a, b) => a.timestamp - b.timestamp);
+      }
+    });
+  };
+
+  // Multi-dancer position change (for group drag)
+  const handleMultiPositionChange = (changes: Record<string, Position>) => {
+    setIsPlaying(false);
+    setKeyframes(prev => {
+      const existingIndex = prev.findIndex(k => Math.abs(k.timestamp - currentTime) < 50);
+      if (existingIndex >= 0) {
+        const newKeyframes = [...prev];
+        newKeyframes[existingIndex] = {
+          ...newKeyframes[existingIndex],
+          positions: { ...newKeyframes[existingIndex].positions, ...changes }
+        };
+        return newKeyframes;
+      } else {
+        const newKf: Keyframe = {
+          id: Date.now().toString(),
+          timestamp: currentTime,
+          positions: { ...currentPositions, ...changes }
         };
         return [...prev, newKf].sort((a, b) => a.timestamp - b.timestamp);
       }
@@ -632,7 +654,14 @@ function App() {
   const removeDancer = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setDancers(prev => prev.filter(d => d.id !== id));
-    if (selectedDancerId === id) setSelectedDancerId(null);
+    setSelectedDancerIds(prev => {
+      if (prev.has(id)) {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      }
+      return prev;
+    });
   };
 
   const updateDancer = (id: string, updates: Partial<Dancer>) => {
@@ -736,10 +765,21 @@ function App() {
             <div className="flex-1 overflow-y-auto p-3 flex flex-col">
                 <div className="space-y-2 flex-1">
                     {dancers.map(dancer => (
-                        <div key={dancer.id} onClick={() => setSelectedDancerId(dancer.id)} className={`flex items-center justify-between p-2 rounded border transition cursor-pointer ${selectedDancerId === dancer.id ? 'bg-indigo-900/40 border-indigo-500/50 shadow-sm' : 'bg-gray-800/50 border-gray-800 hover:bg-gray-800'}`}>
+                        <div key={dancer.id} onClick={(e) => {
+                            if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                              setSelectedDancerIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(dancer.id)) next.delete(dancer.id);
+                                else next.add(dancer.id);
+                                return next;
+                              });
+                            } else {
+                              setSelectedDancerIds(new Set([dancer.id]));
+                            }
+                        }} className={`flex items-center justify-between p-2 rounded border transition cursor-pointer ${selectedDancerIds.has(dancer.id) ? 'bg-indigo-900/40 border-indigo-500/50 shadow-sm' : 'bg-gray-800/50 border-gray-800 hover:bg-gray-800'}`}>
                             <div className="flex items-center space-x-3 flex-1">
                                 <input type="color" value={dancer.color} onChange={(e) => updateDancer(dancer.id, { color: e.target.value })} className="w-5 h-5 rounded-full overflow-hidden border-0 p-0 bg-transparent cursor-pointer shrink-0" />
-                                <input type="text" value={dancer.name} onChange={(e) => updateDancer(dancer.id, { name: e.target.value })} className={`bg-transparent border-none focus:outline-none text-sm font-medium w-full ${selectedDancerId === dancer.id ? 'text-white' : 'text-gray-300'}`} onClick={(e) => e.stopPropagation()} placeholder="Name" />
+                                <input type="text" value={dancer.name} onChange={(e) => updateDancer(dancer.id, { name: e.target.value })} className={`bg-transparent border-none focus:outline-none text-sm font-medium w-full ${selectedDancerIds.has(dancer.id) ? 'text-white' : 'text-gray-300'}`} onClick={(e) => e.stopPropagation()} placeholder="Name" />
                             </div>
                             <button onClick={(e) => removeDancer(dancer.id, e)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded transition"><Trash2 size={14} /></button>
                         </div>
@@ -766,7 +806,7 @@ function App() {
                 <div className="relative flex-1 w-full overflow-hidden bg-gray-950">
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-full h-full">
-                            <Stage ref={stageRef} dancers={dancers} positions={currentPositions} onPositionChange={handlePositionChange} isRecording={isRecording} selectedDancerId={selectedDancerId} onSelectDancer={setSelectedDancerId} gridSize={gridSize} snapToGrid={isSnapEnabled} zoom={zoomLevel} onZoomChange={setZoomLevel} />
+                            <Stage ref={stageRef} dancers={dancers} positions={currentPositions} onPositionChange={handlePositionChange} onMultiPositionChange={handleMultiPositionChange} isRecording={isRecording} selectedDancerIds={selectedDancerIds} onSelectDancers={setSelectedDancerIds} gridSize={gridSize} snapToGrid={isSnapEnabled} zoom={zoomLevel} onZoomChange={setZoomLevel} />
                         </div>
                     </div>
                 </div>
