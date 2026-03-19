@@ -1021,7 +1021,7 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative min-h-0">
-        <div className={`absolute top-0 bottom-0 left-0 bg-gray-900 border-r border-gray-800 z-30 transition-all duration-300 ease-in-out flex flex-col shadow-2xl pointer-events-auto ${isSidebarOpen ? 'w-full sm:w-72 translate-x-0 max-w-[320px]' : 'w-72 -translate-x-full'}`}>
+        <div className={`absolute top-0 bottom-0 left-0 bg-gray-900 border-r border-gray-800 z-30 transition-all duration-300 ease-in-out flex flex-col shadow-2xl pointer-events-auto ${isSidebarOpen ? 'w-full sm:w-80 translate-x-0 max-w-[360px]' : 'w-80 -translate-x-full'}`}>
 
           {/* Group List */}
           <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-900">

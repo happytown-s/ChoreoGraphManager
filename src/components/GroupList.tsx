@@ -284,10 +284,10 @@ export const GroupList: FC<GroupListProps> = ({
                                                 className="w-3 h-3 sm:w-2 sm:h-2 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: group.color }}
                                             />
-                                            <span className={`text-sm font-medium truncate ${group.isVisible ? 'text-slate-200' : 'text-slate-500'}`}>
+                                            <span className={`text-sm font-medium ${group.isVisible ? 'text-slate-200' : 'text-slate-500'} whitespace-nowrap`}>
                                                 {group.name}
                                             </span>
-                                            <span className="text-xs text-slate-600 hidden sm:inline">
+                                            <span className="text-xs text-slate-600 hidden sm:inline shrink-0">
                                                 ({groupDancers.length})
                                             </span>
                                             <TouchButton
