@@ -1,0 +1,46 @@
+{
+  "task_id": "task_timeout_prevention",
+  "description": "タイムアウト防止のための進捗管理",
+  "status": "completed",
+  "last_updated": "2026-03-19T00:00:00.000Z",
+  "steps": {
+    "1_setup_progress_file": {
+      "status": "completed",
+      "description": "進捗管理ファイルの作成",
+      "completed": true,
+      "notes": "task_progress.json と README_TASK_RECOVERY.md を作成完了"
+    },
+    "2_document_workflow": {
+      "status": "completed",
+      "description": "進捗管理のワークフローをドキュメント化",
+      "completed": true,
+      "notes": "README_TASK_RECOVERY.md に詳細なガイドを作成"
+    },
+    "3_test_recovery": {
+      "status": "completed",
+      "description": "復旧機能のテスト",
+      "completed": true,
+      "notes": "進捗ファイルの読み書きを確認。仕組みは正常動作"
+    }
+  },
+  "current_step": "completed",
+  "next_action": "進捗管理システムを日常の開発作業で使用する",
+  "context": {
+    "working_directory": "/Volumes/dock st 1TB/Dev/ChoreoGraphManager",
+    "project_type": "Node.js",
+    "git_branch": "main",
+    "last_changes": [
+      "README.md (modified)",
+      "src/App.tsx (modified)",
+      "src/components/Stage.tsx (modified)",
+      "src/types.ts (modified)",
+      "src/components/GroupList.tsx (new)",
+      "src/hooks/ (new)"
+    ]
+  },
+  "recovery_notes": [
+    "作業開始時にこのJSONファイルを読み込んで、続きから再開する",
+    "各ステップ完了時に 'status': 'completed' に更新する",
+    "search_working_memory で 'task_progress' を検索すると履歴を確認できる"
+  ]
+}

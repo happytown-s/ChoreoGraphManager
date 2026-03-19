@@ -7,12 +7,22 @@ export interface Dancer {
   id: string;
   name: string;
   color: string;
+  groupId?: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  color: string;
+  isVisible: boolean;
+  isSolo?: boolean; // Optional: UI state managed in App or here
 }
 
 export interface Keyframe {
   id: string;
   timestamp: number; // in milliseconds
   positions: Record<string, Position>; // DancerID -> Position
+  controlPoints?: Record<string, Position>; // DancerID -> ControlPoint (for Bezier to NEXT keyframe)
 }
 
 export interface AppState {
