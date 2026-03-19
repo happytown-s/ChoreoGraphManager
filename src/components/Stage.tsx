@@ -435,7 +435,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
                 alpha: true,
                 willReadFrequently: false,
                 preserveDrawingBuffer: true
-            });
+            }) as CanvasRenderingContext2D | null;
 
             if (ctx) {
                 drawScene(ctx, canvas.width, canvas.height, transform);
@@ -448,7 +448,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
                 alpha: true,
                 willReadFrequently: false,
                 preserveDrawingBuffer: true
-            });
+            }) as CanvasRenderingContext2D | null;
 
             if (recCtx) {
                 const fixedTransform = {
@@ -672,7 +672,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
                     alpha: true,
                     willReadFrequently: false,
                     preserveDrawingBuffer: true
-                });
+                }) as CanvasRenderingContext2D | null;
                 if (ctx) {
                     drawScene(ctx, canvas.width, canvas.height, transform);
                 }
@@ -700,7 +700,7 @@ const Stage = forwardRef<StageRef, StageProps>(({
                         alpha: true,
                         willReadFrequently: false,
                         preserveDrawingBuffer: true
-                    });
+                    }) as CanvasRenderingContext2D | null;
                     if (ctx) {
                         drawScene(ctx, canvas.width, canvas.height, transform);
                     }

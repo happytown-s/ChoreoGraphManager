@@ -385,7 +385,7 @@ function App() {
       if ('fastSeek' in audio) {
         (audio as any).fastSeek(newTime / 1000);
       } else {
-        audio.currentTime = newTime / 1000;
+        (audio as HTMLAudioElement).currentTime = newTime / 1000;
       }
     } else {
       if (isPlaying) setIsPlaying(false);
