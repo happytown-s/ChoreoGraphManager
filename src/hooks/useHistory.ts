@@ -1,9 +1,18 @@
 import { useState, useCallback } from 'react';
 
-interface HistoryState<T> {
+export interface HistoryState<T> {
     past: T[];
     present: T;
     future: T[];
+}
+
+export interface HistoryAPI {
+    pushState: (state: any) => void;
+    undo: () => void;
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    set: (state: any) => void;
 }
 
 export function useHistory<T>(initialState: T) {
