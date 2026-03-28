@@ -631,8 +631,38 @@ const Stage = forwardRef<StageRef, StageProps>(({
                 const dragIds = selectedDancerIds.has(hitId) ? selectedDancerIds : new Set([hitId]);
                 const startPositions: Record<string, Position> = {};
                 dragIds.forEach(id => {
-                    startPositions[id] = positions[id] || { x: 0, y: 0 };
+                    const pos = positions[id] || { x: 0, y: 0 };
+                    // When snap-to-grid is ON, snap the drag start position so all
+                    // subsequent movement stays grid-aligned (fixes #40)
+                    startPositions[id] = (snapToGrid && gridSize > 1) ? snapPosition(pos) : pos;
                 });
+
+                // If positions were snapped, commit the snapped positions immediately
+                if (snapToGrid && gridSize > 1) {
+                    let needsCommit = false;
+                    for (const id of dragIds) {
+                        const original = positions[id];
+                        const snapped = startPositions[id];
+                        if (original && (original.x !== snapped.x || original.y !== snapped.y)) {
+                            needsCommit = true;
+                            break;
+                        }
+                    }
+                    if (needsCommit) {
+                        const snappedChanges: Record<string, Position> = {};
+                        for (const id of dragIds) {
+                            snappedChanges[id] = startPositions[id];
+                        }
+                        if (snappedChanges[Object.keys(snappedChanges)[0]]) {
+                            if (Object.keys(snappedChanges).length === 1) {
+                                const id = Object.keys(snappedChanges)[0];
+                                onPositionChange(id, snappedChanges[id]);
+                            } else {
+                                onMultiPositionChange(snappedChanges);
+                            }
+                        }
+                    }
+                }
 
                 multiDragStateRef.current = {
                     dragging: true,
