@@ -97,6 +97,18 @@ const Stage = forwardRef<StageRef, StageProps>(({
     // Track if we should toggle selection on pointer up (for multi-select mode)
     const pendingToggleRef = useRef<string | null>(null);
 
+    // Refs for frame-perfect recording: bypass React re-render timing
+    const positionsRef = useRef(positions);
+    const dancersRef = useRef(dancers);
+    const groupsRef = useRef(groups);
+    const activePathsRef = useRef(activePaths);
+    const isDraggingDancersRef = useRef(isDraggingDancers);
+    positionsRef.current = positions;
+    dancersRef.current = dancers;
+    groupsRef.current = groups;
+    activePathsRef.current = activePaths;
+    isDraggingDancersRef.current = isDraggingDancers;
+
     // --- 1. サイズ変更検知（偶数サイズを徹底する） ---
     useEffect(() => {
         const container = containerRef.current;
@@ -190,13 +202,29 @@ const Stage = forwardRef<StageRef, StageProps>(({
     });
 
     // --- 描画ロジック ---
+    interface DrawSceneParams {
+        dancersOverride?: Dancer[];
+        positionsOverride?: Record<string, Position>;
+        groupsOverride?: Group[];
+        activePathsOverride?: StageProps['activePaths'];
+        selectedDancerIdsOverride?: Set<string>;
+    }
+
     const drawScene = (
         ctx: CanvasRenderingContext2D,
         width: number,
         height: number,
         currentTransform: { x: number, y: number, k: number },
-        isForRecording: boolean = false
+        isForRecording: boolean = false,
+        params?: DrawSceneParams
     ) => {
+        // Use override values if provided (for rAF loop), otherwise use closure state
+        const usedDancers = params?.dancersOverride ?? dancers;
+        const usedPositions = params?.positionsOverride ?? positions;
+        const usedGroups = params?.groupsOverride ?? groups;
+        const usedActivePaths = params?.activePathsOverride ?? activePaths;
+        const usedSelectedDancerIds = params?.selectedDancerIdsOverride ?? selectedDancerIds;
+
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, width, height);
@@ -283,8 +311,8 @@ const Stage = forwardRef<StageRef, StageProps>(({
         }
 
         // Bezier Paths & Handles (Behind dancers)
-        if (!isForRecording && activePaths) {
-            activePaths.forEach(path => {
+        if (!isForRecording && usedActivePaths) {
+            usedActivePaths.forEach(path => {
                 // Hull lines
                 ctx.beginPath();
                 ctx.moveTo(path.startPos.x, path.startPos.y);
@@ -317,10 +345,10 @@ const Stage = forwardRef<StageRef, StageProps>(({
         }
 
         // Dancers
-        const isSoloMode = groups.some(g => g.isSolo);
+        const isSoloMode = usedGroups.some(g => g.isSolo);
 
-        dancers.forEach((dancer) => {
-            const group = groups.find(g => g.id === dancer.groupId);
+        usedDancers.forEach((dancer) => {
+            const group = usedGroups.find(g => g.id === dancer.groupId);
 
             // Visibility Check - 薄く表示
             let opacity = 1;
@@ -335,15 +363,15 @@ const Stage = forwardRef<StageRef, StageProps>(({
                 }
             }
 
-            let pos = positions[dancer.id] || { x: 0, y: 0 };
+            let pos = usedPositions[dancer.id] || { x: 0, y: 0 };
 
             // Override if multi-dragging
             if (multiDragStateRef.current && multiDragStateRef.current.dragging && multiDragStateRef.current.currentOffsets[dancer.id]) {
                 pos = multiDragStateRef.current.currentOffsets[dancer.id];
             }
 
-            const isSelected = !isForRecording && selectedDancerIds.has(dancer.id);
-            const isDragging = !isForRecording && isDraggingDancers && selectedDancerIds.has(dancer.id);
+            const isSelected = !isForRecording && usedSelectedDancerIds.has(dancer.id);
+            const isDragging = !isForRecording && isDraggingDancers && usedSelectedDancerIds.has(dancer.id);
 
             ctx.globalAlpha = opacity;
 
@@ -462,6 +490,43 @@ const Stage = forwardRef<StageRef, StageProps>(({
 
 
     }, [dancers, positions, isDraggingDancers, isRecording, selectedDancerIds, gridSize, transform, canvasSize, activePaths, groups]);
+
+    // --- 5b. Recording rAF loop (frame-perfect recording canvas updates) ---
+    useEffect(() => {
+        if (!isRecording) return;
+
+        const recCanvas = recordingCanvasRef.current;
+        if (!recCanvas) return;
+
+        const recCtx = recCanvas.getContext('2d', {
+            alpha: true,
+            willReadFrequently: false,
+            preserveDrawingBuffer: true
+        }) as CanvasRenderingContext2D | null;
+        if (!recCtx) return;
+
+        const fixedTransform = {
+            x: WINGS_WIDTH * REC_SCALE,
+            y: WING_TOP * REC_SCALE,
+            k: REC_SCALE
+        };
+
+        let frameId: number;
+
+        const loop = () => {
+            // Build a snapshot from latest refs — no React dependency lag
+            drawScene(recCtx, recCanvas.width, recCanvas.height, fixedTransform, true, {
+                dancersOverride: dancersRef.current,
+                positionsOverride: positionsRef.current,
+                groupsOverride: groupsRef.current,
+                activePathsOverride: activePathsRef.current,
+            });
+            frameId = requestAnimationFrame(loop);
+        };
+
+        frameId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(frameId);
+    }, [isRecording]);
 
     // --- 6. イベントハンドラ ---
 
