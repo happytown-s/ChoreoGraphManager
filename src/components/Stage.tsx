@@ -97,6 +97,17 @@ const Stage = forwardRef<StageRef, StageProps>(({
     // Track if we should toggle selection on pointer up (for multi-select mode)
     const pendingToggleRef = useRef<string | null>(null);
 
+    // --- Grid snap helper ---
+    const snapValue = (val: number) => {
+        if (gridSize <= 1) return val;
+        return Math.round(val / gridSize) * gridSize;
+    };
+
+    const snapPosition = (pos: Position): Position => ({
+        x: snapValue(pos.x),
+        y: snapValue(pos.y)
+    });
+
     // Refs for frame-perfect recording: bypass React re-render timing
     const positionsRef = useRef(positions);
     const dancersRef = useRef(dancers);
@@ -108,6 +119,23 @@ const Stage = forwardRef<StageRef, StageProps>(({
     groupsRef.current = groups;
     activePathsRef.current = activePaths;
     isDraggingDancersRef.current = isDraggingDancers;
+
+    // --- Snap all dancers to grid when snap-to-grid is enabled ---
+    useEffect(() => {
+        if (!snapToGrid || gridSize <= 1) return;
+        const changes: Record<string, Position> = {};
+        for (const dancer of dancers) {
+            const pos = positions[dancer.id];
+            if (!pos) continue;
+            const snapped = snapPosition(pos);
+            if (snapped.x !== pos.x || snapped.y !== pos.y) {
+                changes[dancer.id] = snapped;
+            }
+        }
+        if (Object.keys(changes).length > 0) {
+            onMultiPositionChange(changes);
+        }
+    }, [snapToGrid]);
 
     // --- 1. サイズ変更検知（偶数サイズを徹底する） ---
     useEffect(() => {
@@ -828,11 +856,23 @@ const Stage = forwardRef<StageRef, StageProps>(({
                 }
 
                 if (moved) {
-                    if (Object.keys(offsets).length === 1) {
-                        const id = Object.keys(offsets)[0];
-                        onPositionChange(id, offsets[id]);
+                    if (snapToGrid && gridSize > 1) {
+                        // Snap ALL dancer positions to grid when drag ends with snap enabled
+                        const allSnapped: Record<string, Position> = {};
+                        for (const dancer of dancers) {
+                            const pos = dancer.id in offsets ? offsets[dancer.id] : positions[dancer.id];
+                            if (pos) {
+                                allSnapped[dancer.id] = snapPosition(pos);
+                            }
+                        }
+                        onMultiPositionChange(allSnapped);
                     } else {
-                        onMultiPositionChange(offsets);
+                        if (Object.keys(offsets).length === 1) {
+                            const id = Object.keys(offsets)[0];
+                            onPositionChange(id, offsets[id]);
+                        } else {
+                            onMultiPositionChange(offsets);
+                        }
                     }
                 } else {
                     // No movement - check if we should toggle selection
