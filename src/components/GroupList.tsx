@@ -284,24 +284,23 @@ export const GroupList: FC<GroupListProps> = ({
                                                 className="w-3 h-3 sm:w-2 sm:h-2 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: group.color }}
                                             />
-                                            <span className={`text-sm font-medium ${group.isVisible ? 'text-slate-200' : 'text-slate-500'} whitespace-nowrap`}>
+                                            {/* Group name - tap to rename on mobile */}
+                                            <span
+                                                className={`text-sm font-medium ${group.isVisible ? 'text-slate-200' : 'text-slate-500'} whitespace-nowrap cursor-pointer min-h-[44px] sm:min-h-0 flex items-center sm:cursor-default`}
+                                                onClick={() => handleStartEdit(group)}
+                                                title="Tap to rename"
+                                            >
                                                 {group.name}
                                             </span>
                                             <span className="text-xs text-slate-600 hidden sm:inline shrink-0">
                                                 ({groupDancers.length})
                                             </span>
+                                            {/* Edit button - desktop only, shown on hover */}
                                             <TouchButton
                                                 onClick={() => handleStartEdit(group)}
                                                 className="opacity-0 group-hover/title:opacity-100 text-slate-500 hover:text-slate-300 transition-opacity p-1 hidden sm:flex min-h-0 min-w-0"
                                             >
                                                 <Edit2 size={12} />
-                                            </TouchButton>
-                                            {/* Edit button - always visible on mobile */}
-                                            <TouchButton
-                                                onClick={() => handleStartEdit(group)}
-                                                className="text-slate-500 hover:text-slate-300 p-2 sm:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                            >
-                                                <Edit2 size={14} />
                                             </TouchButton>
                                         </div>
                                     )}
