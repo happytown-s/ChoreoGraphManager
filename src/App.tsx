@@ -428,6 +428,7 @@ function App() {
                 onToggleSolo={groupDancer.handleToggleSolo}
                 onAddDancer={groupDancer.addNewDancer}
                 onDeleteDancer={groupDancer.removeDancer}
+                onUpdateDancer={groupDancer.updateDancer}
               />
             </div>
           </div>

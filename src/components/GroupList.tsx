@@ -15,6 +15,7 @@ interface GroupListProps {
     onToggleSolo: (groupId: string) => void;
     onAddDancer: () => void;
     onDeleteDancer: (dancerId: string) => void;
+    onUpdateDancer: (id: string, updates: Partial<Dancer>) => void;
 }
 
 // モバイル対応のボタンコンポーネント
@@ -59,14 +60,18 @@ export const GroupList: FC<GroupListProps> = ({
     onAssignDancerToGroup,
     onToggleSolo,
     onAddDancer,
-    onDeleteDancer
+    onDeleteDancer,
+    onUpdateDancer,
 }) => {
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [editingDancerId, setEditingDancerId] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(groups.map(g => g.id)));
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [assigningDancerId, setAssigningDancerId] = useState<string | null>(null);
     const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+    const [colorPickerDancerId, setColorPickerDancerId] = useState<string | null>(null);
+    const [colorPickerAnchor, setColorPickerAnchor] = useState<{ top: number; left: number } | null>(null);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +92,42 @@ export const GroupList: FC<GroupListProps> = ({
 
     const handleCancelEdit = () => {
         setEditingGroupId(null);
+    };
+
+    // --- Dancer name edit ---
+    const handleStartDancerEdit = (dancer: Dancer, e?: PointerEvent<HTMLDivElement>) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        setEditingDancerId(dancer.id);
+        setEditName(dancer.name);
+    };
+
+    const handleSaveDancerEdit = () => {
+        if (editingDancerId && editName.trim()) {
+            onUpdateDancer(editingDancerId, { name: editName.trim() });
+        }
+        setEditingDancerId(null);
+    };
+
+    const handleCancelDancerEdit = () => {
+        setEditingDancerId(null);
+    };
+
+    // --- Dancer color picker ---
+    const handleColorPickerOpen = (dancerId: string, e: PointerEvent<HTMLSpanElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setColorPickerAnchor({ top: rect.bottom + 4, left: rect.left });
+        setColorPickerDancerId(dancerId);
+    };
+
+    const handleColorChange = (color: string) => {
+        if (colorPickerDancerId) {
+            onUpdateDancer(colorPickerDancerId, { color });
+        }
     };
 
     const toggleGroupExpand = (groupId: string) => {
@@ -155,6 +196,86 @@ export const GroupList: FC<GroupListProps> = ({
         e.preventDefault();
     };
 
+    // Reusable dancer chip with name editing + color picker
+    const DancerChip: FC<{ dancer: Dancer; inGroup?: boolean; visible?: boolean }> = ({ dancer, inGroup, visible = true }) => {
+        const isEditing = editingDancerId === dancer.id;
+
+        if (isEditing) {
+            return (
+                <div className="flex items-center gap-1 bg-slate-600 px-2 py-1 rounded-lg min-h-[44px] sm:min-h-0">
+                    <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveDancerEdit();
+                            if (e.key === 'Escape') handleCancelDancerEdit();
+                            e.stopPropagation();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-slate-900 text-white text-sm px-2 py-1 rounded border border-slate-600 w-full focus:outline-none focus:border-blue-500 min-h-[44px] sm:min-h-0"
+                        autoFocus
+                    />
+                    <TouchButton
+                        onClick={() => handleSaveDancerEdit()}
+                        className="text-green-500 hover:text-green-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    >
+                        <Check size={16} />
+                    </TouchButton>
+                    <TouchButton
+                        onClick={() => handleCancelDancerEdit()}
+                        className="text-slate-500 hover:text-slate-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    >
+                        <X size={16} />
+                    </TouchButton>
+                </div>
+            );
+        }
+
+        return (
+            <div className="relative group/dancer">
+                <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, dancer.id)}
+                    onPointerUp={(e) => handleDancerClick(dancer.id, e)}
+                    className={`px-3 py-2 sm:px-2 sm:py-1 rounded-lg text-sm sm:text-xs cursor-pointer border flex items-center gap-2 sm:gap-1 min-h-[44px] sm:min-h-0 select-none ${inGroup
+                        ? 'bg-slate-700/50 text-slate-300 border-transparent hover:border-slate-500 hover:bg-slate-600 active:bg-slate-500'
+                        : 'bg-slate-700 text-slate-200 border-transparent hover:border-slate-500 hover:bg-slate-600 active:bg-slate-500'
+                        }`}
+                    style={{ opacity: visible ? 1 : 0.5 }}
+                    title={`${dancer.name} - Tap to ${inGroup ? 'reassign' : 'assign'}`}
+                >
+                    {/* Color circle - tap to open color picker */}
+                    <span
+                        className="w-4 h-4 sm:w-3 sm:h-3 rounded-full inline-block flex-shrink-0 cursor-pointer border border-slate-500 hover:border-white transition-colors"
+                        style={{ backgroundColor: dancer.color }}
+                        onPointerUp={(e) => handleColorPickerOpen(dancer.id, e)}
+                        title="Change color"
+                    />
+                    {/* Dancer name - tap to rename (mobile) / show edit button on hover (desktop) */}
+                    <div className="flex items-center gap-1 flex-1 min-w-0 group/name">
+                        <span
+                            className="truncate cursor-pointer min-h-[44px] sm:min-h-0 flex items-center sm:cursor-default"
+                            onClick={() => handleStartDancerEdit(dancer)}
+                        >
+                            {dancer.name}
+                        </span>
+                        {/* Edit button - desktop only, shown on hover */}
+                        <TouchButton
+                            onClick={() => handleStartDancerEdit(dancer)}
+                            className="opacity-0 group-hover/name:opacity-100 text-slate-400 hover:text-slate-200 transition-opacity p-1 hidden sm:flex min-h-0 min-w-0"
+                        >
+                            <Edit2 size={12} />
+                        </TouchButton>
+                    </div>
+                    {!inGroup && (
+                        <Move size={12} className="hidden sm:block text-slate-500 ml-1" />
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-900 border-l border-slate-700 md:w-64 w-full">
             {/* Header */}
@@ -192,25 +313,7 @@ export const GroupList: FC<GroupListProps> = ({
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {ungroupedDancers.map(dancer => (
-                            <div
-                                key={dancer.id}
-                                className="relative group/dancer"
-                            >
-                                <div
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, dancer.id)}
-                                    onPointerUp={(e) => handleDancerClick(dancer.id, e)}
-                                    className="bg-slate-700 px-3 py-2 sm:px-2 sm:py-1 rounded-lg text-sm sm:text-xs text-slate-200 cursor-pointer hover:bg-slate-600 active:bg-slate-500 border border-transparent hover:border-slate-500 flex items-center gap-2 sm:gap-1 min-h-[44px] sm:min-h-0 select-none"
-                                    title={`${dancer.name} - Tap to assign`}
-                                >
-                                    <span
-                                        className="w-3 h-3 sm:w-2 sm:h-2 rounded-full inline-block flex-shrink-0"
-                                        style={{ backgroundColor: dancer.color }}
-                                    />
-                                    <span className="truncate">{dancer.name}</span>
-                                    <Move size={12} className="hidden sm:block text-slate-500 ml-1" />
-                                </div>
-                            </div>
+                            <DancerChip key={dancer.id} dancer={dancer} />
                         ))}
                         {ungroupedDancers.length === 0 && (
                             <span className="text-xs text-slate-600 italic py-2">No dancers</span>
@@ -334,25 +437,7 @@ export const GroupList: FC<GroupListProps> = ({
                             {isExpanded && (
                                 <div className="p-2 pt-0 flex flex-wrap gap-2 border-t border-slate-700/50 mt-2 pt-2">
                                     {groupDancers.map(dancer => (
-                                        <div
-                                            key={dancer.id}
-                                            className="relative group/dancer"
-                                        >
-                                            <div
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, dancer.id)}
-                                                onPointerUp={(e) => handleDancerClick(dancer.id, e)}
-                                                className="bg-slate-700/50 px-3 py-2 sm:px-2 sm:py-1 rounded-lg text-sm sm:text-xs text-slate-300 cursor-pointer hover:bg-slate-600 active:bg-slate-500 border border-transparent hover:border-slate-500 flex items-center gap-2 sm:gap-1 min-h-[44px] sm:min-h-0 select-none"
-                                                style={{ opacity: group.isVisible ? 1 : 0.5 }}
-                                                title={`${dancer.name} - Tap to reassign`}
-                                            >
-                                                <span
-                                                    className="w-3 h-3 sm:w-2 sm:h-2 rounded-full inline-block flex-shrink-0"
-                                                    style={{ backgroundColor: dancer.color }}
-                                                />
-                                                <span className="truncate">{dancer.name}</span>
-                                            </div>
-                                        </div>
+                                        <DancerChip key={dancer.id} dancer={dancer} inGroup visible={group.isVisible} />
                                     ))}
                                     {groupDancers.length === 0 && (
                                         <div className="w-full text-center py-3 sm:py-2 text-xs text-slate-600 border border-dashed border-slate-700/50 rounded">
@@ -446,6 +531,61 @@ export const GroupList: FC<GroupListProps> = ({
                                 <Trash2 size={14} />
                                 Delete Dancer
                             </TouchButton>
+                        </div>
+                    </div>
+                </>
+            )}
+            {/* Color Picker Dropdown */}
+            {colorPickerDancerId && colorPickerAnchor && (
+                <>
+                    <div
+                        className="fixed inset-0 z-40"
+                        onPointerUp={() => {
+                            setColorPickerDancerId(null);
+                            setColorPickerAnchor(null);
+                        }}
+                    />
+                    <div
+                        className="fixed bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden p-3"
+                        style={{
+                            top: colorPickerAnchor.top,
+                            left: colorPickerAnchor.left,
+                        }}
+                    >
+                        <div className="text-xs text-slate-500 mb-2">Color</div>
+                        <div className="grid grid-cols-6 gap-1.5">
+                            {[
+                                '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6',
+                                '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#6366f1', '#a855f7',
+                                '#64748b', '#ffffff', '#000000', '#fbbf24', '#34d399', '#60a5fa',
+                            ].map(c => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleColorChange(c);
+                                        setColorPickerDancerId(null);
+                                        setColorPickerAnchor(null);
+                                    }}
+                                    className={`w-7 h-7 rounded-full border-2 hover:scale-110 transition-transform cursor-pointer ${dancers.find(d => d.id === colorPickerDancerId)?.color === c ? 'border-white' : 'border-slate-600'}`}
+                                    style={{ backgroundColor: c }}
+                                />
+                            ))}
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-700">
+                            <label className="flex items-center gap-2 text-xs text-slate-400">
+                                Custom
+                                <input
+                                    type="color"
+                                    value={dancers.find(d => d.id === colorPickerDancerId)?.color || '#ffffff'}
+                                    onChange={(e) => {
+                                        handleColorChange(e.target.value);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-7 h-7 rounded cursor-pointer bg-transparent border-0"
+                                />
+                            </label>
                         </div>
                     </div>
                 </>
