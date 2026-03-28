@@ -483,6 +483,39 @@ export const GroupList: FC<GroupListProps> = ({
                             left: dropdownPosition.left,
                         }}
                     >
+                        {/* Rename & Change Color */}
+                        {(() => {
+                            const currentDancer = dancers.find(d => d.id === assigningDancerId);
+                            if (!currentDancer) return null;
+                            return (
+                                <>
+                                    <TouchButton
+                                        onClick={() => {
+                                            setAssigningDancerId(null);
+                                            setDropdownPosition(null);
+                                            handleStartDancerEdit(currentDancer);
+                                        }}
+                                        className="w-full text-left px-3 py-2.5 sm:py-2 text-sm text-slate-300 hover:bg-slate-700 active:bg-slate-600 flex items-center gap-2 min-h-[44px] sm:min-h-0"
+                                    >
+                                        <Edit2 size={14} className="text-slate-400" />
+                                        📝 Rename
+                                    </TouchButton>
+                                    <TouchButton
+                                        onClick={() => {
+                                            setAssigningDancerId(null);
+                                            setDropdownPosition(null);
+                                            setColorPickerDancerId(currentDancer.id);
+                                            setColorPickerAnchor({ top: (dropdownPosition?.top ?? 0), left: (dropdownPosition?.left ?? 0) });
+                                        }}
+                                        className="w-full text-left px-3 py-2.5 sm:py-2 text-sm text-slate-300 hover:bg-slate-700 active:bg-slate-600 flex items-center gap-2 min-h-[44px] sm:min-h-0"
+                                    >
+                                        <span className="w-3 h-3 rounded-full inline-block border border-slate-500" style={{ backgroundColor: currentDancer.color }} />
+                                        🎨 Change Color
+                                    </TouchButton>
+                                    <div className="border-t border-slate-700" />
+                                </>
+                            );
+                        })()}
                         <div className="text-xs text-slate-500 px-3 py-2 border-b border-slate-700">
                             {dancers.find(d => d.id === assigningDancerId)?.groupId ? 'Move to:' : 'Assign to group:'}
                         </div>
