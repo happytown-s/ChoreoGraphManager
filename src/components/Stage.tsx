@@ -120,23 +120,6 @@ const Stage = forwardRef<StageRef, StageProps>(({
     activePathsRef.current = activePaths;
     isDraggingDancersRef.current = isDraggingDancers;
 
-    // --- Snap all dancers to grid when snap-to-grid is enabled ---
-    useEffect(() => {
-        if (!snapToGrid || gridSize <= 1) return;
-        const changes: Record<string, Position> = {};
-        for (const dancer of dancers) {
-            const pos = positions[dancer.id];
-            if (!pos) continue;
-            const snapped = snapPosition(pos);
-            if (snapped.x !== pos.x || snapped.y !== pos.y) {
-                changes[dancer.id] = snapped;
-            }
-        }
-        if (Object.keys(changes).length > 0) {
-            onMultiPositionChange(changes);
-        }
-    }, [snapToGrid]);
-
     // --- 1. サイズ変更検知（偶数サイズを徹底する） ---
     useEffect(() => {
         const container = containerRef.current;
@@ -857,15 +840,17 @@ const Stage = forwardRef<StageRef, StageProps>(({
 
                 if (moved) {
                     if (snapToGrid && gridSize > 1) {
-                        // Snap ALL dancer positions to grid when drag ends with snap enabled
-                        const allSnapped: Record<string, Position> = {};
-                        for (const dancer of dancers) {
-                            const pos = dancer.id in offsets ? offsets[dancer.id] : positions[dancer.id];
-                            if (pos) {
-                                allSnapped[dancer.id] = snapPosition(pos);
-                            }
+                        // Snap only dragged dancers (in offsets) to grid — never touch others
+                        const snappedOffsets: Record<string, Position> = {};
+                        for (const [id, pos] of Object.entries(offsets)) {
+                            snappedOffsets[id] = snapPosition(pos);
                         }
-                        onMultiPositionChange(allSnapped);
+                        if (Object.keys(snappedOffsets).length === 1) {
+                            const id = Object.keys(snappedOffsets)[0];
+                            onPositionChange(id, snappedOffsets[id]);
+                        } else {
+                            onMultiPositionChange(snappedOffsets);
+                        }
                     } else {
                         if (Object.keys(offsets).length === 1) {
                             const id = Object.keys(offsets)[0];
