@@ -268,6 +268,7 @@ function App() {
       projectName,
       dancers,
       keyframes,
+      groups,
       duration: playback.duration,
       audioFileName: audio.audioFileName,
     });

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Dancer, Keyframe } from '../types';
+import { Dancer, Keyframe, Group } from '../types';
 import { isTauri } from '../utils/platform';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
@@ -13,11 +13,22 @@ interface ProjectData {
   audioFileName: string | null;
 }
 
+interface ProjectDataV2 {
+  version: 2;
+  projectName: string;
+  dancers: Dancer[];
+  keyframes: Keyframe[];
+  groups: Group[];
+  duration: number;
+  audioFileName: string | null;
+}
+
 export interface ProjectIOAPI {
   saveProject: (params: {
     projectName: string;
     dancers: Dancer[];
     keyframes: Keyframe[];
+    groups: Group[];
     duration: number;
     audioFileName: string | null;
   }) => Promise<void>;
@@ -38,16 +49,18 @@ export function useProjectIO(): ProjectIOAPI {
     projectName: string;
     dancers: Dancer[];
     keyframes: Keyframe[];
+    groups: Group[];
     duration: number;
     audioFileName: string | null;
   }) => {
     try {
-      const { projectName, dancers, keyframes, duration, audioFileName } = params;
-      const projectData: ProjectData = {
-        version: 1,
+      const { projectName, dancers, keyframes, groups, duration, audioFileName } = params;
+      const projectData: ProjectDataV2 = {
+        version: 2,
         projectName,
         dancers,
         keyframes,
+        groups,
         duration,
         audioFileName,
       };
@@ -104,6 +117,20 @@ export function useProjectIO(): ProjectIOAPI {
             dancers: data.dancers || [],
             keyframes: data.keyframes || [],
             groups: [],
+          });
+          alert(`Project loaded! Please re-upload audio: ${data.audioFileName || 'None'}`);
+        } else if (data.version === 2) {
+          callbacks.setProjectName(data.projectName || 'Untitled Project');
+          callbacks.setDancers(data.dancers || []);
+          callbacks.setKeyframes(data.keyframes || []);
+          callbacks.setDuration(data.duration || 30000);
+          callbacks.setAudioFileName(data.audioFileName || null);
+          callbacks.setAudioFile(null);
+          callbacks.setAudioBuffer(null);
+          callbacks.setHistory({
+            dancers: data.dancers || [],
+            keyframes: data.keyframes || [],
+            groups: data.groups || [],
           });
           alert(`Project loaded! Please re-upload audio: ${data.audioFileName || 'None'}`);
         } else {
