@@ -25,6 +25,8 @@ export function useAudio(): AudioEngineAPI {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioDestNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  // Track the previous ObjectURL so we can revoke it before creating a new one
+  const prevAudioUrlRef = useRef<string | null>(null);
 
   // Initialize AudioContext once
   useEffect(() => {
@@ -47,7 +49,12 @@ export function useAudio(): AudioEngineAPI {
   }, []);
 
   const handleAudioUpload = async (file: File) => {
+    // Revoke previous ObjectURL to prevent memory leak
+    if (prevAudioUrlRef.current) {
+      URL.revokeObjectURL(prevAudioUrlRef.current);
+    }
     const url = URL.createObjectURL(file);
+    prevAudioUrlRef.current = url;
     setAudioFile(url);
     setAudioFileName(file.name);
 

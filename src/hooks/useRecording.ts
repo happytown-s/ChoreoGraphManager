@@ -18,6 +18,9 @@ export function useRecording(projectName: string): RecordingAPI {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // Track the audio element that was used to create MediaElementSource,
+  // so we never call createMediaElementSource twice on the same element.
+  const mediaElementSourceRef = useRef<{ element: HTMLAudioElement; source: MediaElementAudioSourceNode; ctx: AudioContext } | null>(null);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -98,12 +101,24 @@ export function useRecording(projectName: string): RecordingAPI {
         const audio = audioRef.current;
         if (audio && audioFile) {
           try {
-            const audioCtx = new AudioContext();
-            const source = audioCtx.createMediaElementSource(audio);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-            source.connect(audioCtx.destination);
-            dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+            // Reuse existing MediaElementSource if the audio element hasn't changed
+            if (mediaElementSourceRef.current && mediaElementSourceRef.current.element === audio) {
+              // Already connected — just grab the audio tracks from the existing destination
+              const { ctx, source } = mediaElementSourceRef.current;
+              const dest = ctx.createMediaStreamDestination();
+              source.connect(dest);
+              source.connect(ctx.destination);
+              dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+            } else {
+              // First time for this audio element — create MediaElementSource
+              const audioCtx = new AudioContext();
+              const source = audioCtx.createMediaElementSource(audio);
+              const dest = audioCtx.createMediaStreamDestination();
+              source.connect(dest);
+              source.connect(audioCtx.destination);
+              mediaElementSourceRef.current = { element: audio, source, ctx: audioCtx };
+              dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+            }
           } catch (e) {
             console.warn('[Recording] Could not capture audio element:', e);
           }
