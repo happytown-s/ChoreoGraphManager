@@ -104,6 +104,11 @@ function App() {
     if (!audioEl || !audio.audioFile) return;
 
     if (playback.isPlaying) {
+      // Connect audio element to AudioContext on first play (user gesture).
+      // This ensures the shared MediaStreamDestinationNode carries live audio
+      // for recording, and prevents duplicate MediaElementSource creation.
+      audio.connectAudioElement();
+
       if (Math.abs(audioEl.currentTime * 1000 - playback.currentTime) > 100) {
         audioEl.currentTime = playback.currentTime / 1000;
       }
@@ -254,6 +259,8 @@ function App() {
 
   // --- Recording ---
   const handleStartRecording = () => {
+    // Ensure audio element is connected before recording starts
+    audio.connectAudioElement();
     recording.startRecording(
       stageRef,
       audio.audioDestNodeRef.current,
