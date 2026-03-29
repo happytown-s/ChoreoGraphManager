@@ -24,7 +24,8 @@ export function usePlayback(audioRef: React.RefObject<HTMLAudioElement | null>, 
 
     const audio = audioRef.current;
     if (audio && audioFile) {
-      if (isPlaying) {
+      // Only pause if not currently playing (standard DAW UX keeps playback alive during seek)
+      if (!isPlaying) {
         setIsPlaying(false);
         audio.pause();
       }
