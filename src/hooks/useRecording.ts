@@ -93,23 +93,6 @@ export function useRecording(projectName: string): RecordingAPI {
 
     // Small delay to ensure stream is ready
     setTimeout(() => {
-      if (isSafari || isTauri()) {
-        // Capture audio element for Tauri/Safari
-        const audio = audioRef.current;
-        if (audio && audioFile) {
-          try {
-            const audioCtx = new AudioContext();
-            const source = audioCtx.createMediaElementSource(audio);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-            source.connect(audioCtx.destination);
-            dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-          } catch (e) {
-            console.warn('[Recording] Could not capture audio element:', e);
-          }
-        }
-      }
-
       const timeslice = isSafari ? 100 : 1000;
       recorder.start(timeslice);
       console.log(`[Recording] Started with timeslice: ${timeslice}ms`);
