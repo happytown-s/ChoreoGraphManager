@@ -18,6 +18,7 @@ export function useRecording(projectName: string): RecordingAPI {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const audioElementSourceRef = useRef<{ audioCtx: AudioContext; dest: MediaStreamAudioDestinationNode } | null>(null);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -94,16 +95,19 @@ export function useRecording(projectName: string): RecordingAPI {
     // Small delay to ensure stream is ready
     setTimeout(() => {
       if (isSafari || isTauri()) {
-        // Capture audio element for Tauri/Safari
+        // Capture audio element for Tauri/Safari (reuse MediaElementSource across recordings)
         const audio = audioRef.current;
         if (audio && audioFile) {
           try {
-            const audioCtx = new AudioContext();
-            const source = audioCtx.createMediaElementSource(audio);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-            source.connect(audioCtx.destination);
-            dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+            if (!audioElementSourceRef.current) {
+              const audioCtx = new AudioContext();
+              const source = audioCtx.createMediaElementSource(audio);
+              const dest = audioCtx.createMediaStreamDestination();
+              source.connect(dest);
+              source.connect(audioCtx.destination);
+              audioElementSourceRef.current = { audioCtx, dest };
+            }
+            audioElementSourceRef.current.dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
           } catch (e) {
             console.warn('[Recording] Could not capture audio element:', e);
           }
