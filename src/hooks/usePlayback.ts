@@ -68,9 +68,10 @@ export function usePlayback(audioRef: React.RefObject<HTMLAudioElement | null>, 
         }
 
         lastTimestamp = timestamp;
-        if (isPlaying) {
-          animationFrameId = requestAnimationFrame(tick);
-        }
+      }
+
+      if (isPlaying) {
+        animationFrameId = requestAnimationFrame(tick);
       }
     };
 
