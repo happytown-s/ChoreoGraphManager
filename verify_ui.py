@@ -26,7 +26,7 @@ def verify_ui_elements():
         else:
              print("FAILURE: 'Add Music' label not found.")
 
-        page.screenshot(path="/home/jules/verification/ui_verification.png")
+        page.screenshot(path="./verification/ui_verification.png")
         browser.close()
 
 if __name__ == "__main__":

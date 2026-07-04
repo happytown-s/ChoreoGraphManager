@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Dancer, Position, Group, STAGE_WIDTH, STAGE_HEIGHT } from '../types';
 
 interface StageProps {

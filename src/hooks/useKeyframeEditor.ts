@@ -107,8 +107,8 @@ export function useKeyframeEditor(
     pushH(newKeyframes);
   }, [keyframes, pushH]);
 
-  const handleUpdateKeyframeTime = useCallback((id: string, newTime: number) => {
-    if (newTime < 0) newTime = 0;
+  const handleUpdateKeyframeTime = useCallback((id: string, newTimeRaw: number) => {
+    const newTime = Math.max(0, newTimeRaw);
     const kf = keyframes.find(k => k.id === id);
     if (kf && kf.timestamp === 0 && newTime !== 0) return;
 
@@ -150,12 +150,6 @@ export function useKeyframeEditor(
     pushH(newKeyframes);
   }, [keyframes, pushH]);
 
-  // Compute active Bezier paths for current time
-  const activePaths: KeyframeEditorAPI['activePaths'] = [];
-  const sorted = [...keyframes].sort((a, b) => a.timestamp - b.timestamp);
-  // This is a simplified computation — in App.tsx it was computed inline
-  // We'll compute it reactively in the component instead
-
   return {
     handlePositionChange,
     handleMultiPositionChange,
@@ -165,6 +159,6 @@ export function useKeyframeEditor(
     handleJumpNextKeyframe,
     handleJumpPrevKeyframe,
     handleControlPointChange,
-    activePaths,
+    activePaths: [],
   };
 }

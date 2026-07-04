@@ -114,7 +114,8 @@ function App() {
     } else {
       audioEl.pause();
     }
-  }, [playback.isPlaying, audio.audioFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playback.isPlaying, audio.audioFile,
+      audio.audioContextRef, playback.currentTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Responsive sidebar ---
   useEffect(() => {
@@ -175,7 +176,7 @@ function App() {
     return interpolated;
   }, [playback.currentTime, sortedKeyframes, dancers]);
 
-  const currentPositions = getCurrentPositions();
+  const currentPositions = useMemo(() => getCurrentPositions(), [getCurrentPositions]);
 
   // --- Active Bezier Paths ---
   const activePaths = useMemo(() => {
@@ -259,6 +260,7 @@ function App() {
       audio.audioDestNodeRef.current,
       audio.audioRef,
       audio.audioFile,
+      audio.audioContextRef,
     );
   };
 

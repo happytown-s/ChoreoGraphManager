@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useState, useEffect, useLayoutEffect } from 'react';
-import { Keyframe } from '../types';
+import { Keyframe, MAX_DURATION } from '../types';
 import { Play, Pause, Plus, Trash2, SkipBack, Clock, SkipForward, Music, ZoomIn, ZoomOut } from 'lucide-react';
 import WaveformWorker from '../workers/waveform.worker?worker';
 
@@ -446,7 +446,8 @@ const Timeline: React.FC<TimelineProps> = ({
             <input
               type="number"
               value={duration / 1000}
-              onChange={(e) => setDuration(Math.max(1, Number(e.target.value)) * 1000)}
+              max={MAX_DURATION / 1000}
+              onChange={(e) => setDuration(Math.min(MAX_DURATION, Math.max(1, Number(e.target.value))) * 1000)}
               className="w-10 sm:w-12 bg-transparent text-white text-sm font-mono focus:outline-none text-right"
             />
             <span className="text-xs text-gray-400 ml-1">s</span>

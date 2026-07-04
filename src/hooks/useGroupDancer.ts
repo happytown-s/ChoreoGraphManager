@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Dancer, Group, STAGE_WIDTH, STAGE_HEIGHT } from '../types';
+import { Dancer, Group, Keyframe, STAGE_WIDTH, STAGE_HEIGHT } from '../types';
 import { HistoryAPI } from './useHistory';
 
 export interface GroupDancerAPI {
@@ -15,7 +15,7 @@ export interface GroupDancerAPI {
 
 export function useGroupDancer(
   dancers: Dancer[],
-  keyframes: any[],
+  keyframes: Keyframe[],
   groups: Group[],
   history: HistoryAPI,
 ): GroupDancerAPI {
@@ -41,7 +41,7 @@ export function useGroupDancer(
     };
 
     const newDancers = [...dancers, newDancer];
-    const newKeyframes = keyframes.map((kf: any) => ({
+    const newKeyframes = keyframes.map((kf: Keyframe) => ({
       ...kf,
       positions: { ...kf.positions, [newId]: { x: STAGE_WIDTH / 2, y: STAGE_HEIGHT / 2 } },
     }));
@@ -53,7 +53,7 @@ export function useGroupDancer(
     if (e) e.stopPropagation();
 
     const newDancers = dancers.filter(d => d.id !== id);
-    const newKeyframes = keyframes.map((kf: any) => {
+    const newKeyframes = keyframes.map((kf: Keyframe) => {
       const { [id]: _, ...rest } = kf.positions;
       return { ...kf, positions: rest };
     });

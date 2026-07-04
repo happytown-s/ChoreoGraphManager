@@ -53,7 +53,7 @@ def verify_fix():
 
         except Exception as e:
              print(f"Error checking time: {e}")
-             page.screenshot(path="/home/jules/verification/verify_error.png")
+             page.screenshot(path="./verification/verify_error.png")
 
         # Stop recording
         if record_btn.is_visible():

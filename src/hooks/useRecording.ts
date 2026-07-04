@@ -10,6 +10,7 @@ export interface RecordingAPI {
     audioDestNode: MediaStreamAudioDestinationNode | null,
     audioRef: React.RefObject<HTMLAudioElement | null>,
     audioFile: string | null,
+    audioCtxRef?: React.RefObject<AudioContext | null>,
   ) => void;
   stopRecording: () => void;
 }
@@ -33,6 +34,7 @@ export function useRecording(projectName: string): RecordingAPI {
     audioDestNode: MediaStreamAudioDestinationNode | null,
     audioRef: React.RefObject<HTMLAudioElement | null>,
     audioFile: string | null,
+    audioCtxRef?: React.RefObject<AudioContext | null>,
   ) => {
     if (!stageRef.current) {
       alert('Stage not available for recording.');
@@ -111,7 +113,10 @@ export function useRecording(projectName: string): RecordingAPI {
               dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
             } else {
               // First time for this audio element — create MediaElementSource
-              const audioCtx = new AudioContext();
+              // Reuse the shared AudioContext from useAudio if available to avoid
+              // creating a second context on the same element (causes silent audio).
+              const sharedCtx = audioCtxRef?.current;
+              const audioCtx = sharedCtx ?? new AudioContext();
               const source = audioCtx.createMediaElementSource(audio);
               const dest = audioCtx.createMediaStreamDestination();
               source.connect(dest);

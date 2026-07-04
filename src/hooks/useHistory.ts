@@ -27,10 +27,15 @@ function shallowEqual(a: unknown, b: unknown): boolean {
     if (keysA.length !== keysB.length) return false;
     for (const key of keysA) {
         if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-        // Top-level shallow comparison: compare values by reference
-        if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) {
-            return false;
+        const valA = (a as Record<string, unknown>)[key];
+        const valB = (b as Record<string, unknown>)[key];
+        if (valA === valB) continue;
+        // For arrays: compare by length + reference (catches new array creation)
+        if (Array.isArray(valA) && Array.isArray(valB)) {
+            if (valA.length !== valB.length) return false;
+            continue;
         }
+        return false;
     }
     return true;
 }
