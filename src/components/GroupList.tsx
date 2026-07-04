@@ -21,11 +21,17 @@ interface GroupListProps {
 // モバイル対応のボタンコンポーネント
 const TouchButton: FC<{
     onClick: () => void;
+    onPointerDown?: () => void;
     className?: string;
     title?: string;
     children: ReactNode;
     variant?: 'default' | 'primary' | 'danger';
-}> = ({ onClick, className = '', title, children, variant = 'default' }) => {
+}> = ({ onClick, onPointerDown, className = '', title, children, variant = 'default' }) => {
+    const handlePointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+        onPointerDown?.();
+    };
+
     const handlePointerUp = (e: PointerEvent<HTMLButtonElement>) => {
         e.preventDefault();
         e.stopPropagation();
@@ -41,6 +47,7 @@ const TouchButton: FC<{
 
     return (
         <button
+            onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             className={`${baseClasses} ${variantClasses[variant]} ${className}`}
             title={title}
@@ -74,8 +81,10 @@ export const GroupList: FC<GroupListProps> = ({
     const [colorPickerAnchor, setColorPickerAnchor] = useState<{ top: number; left: number } | null>(null);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const editBlurActionRef = useRef<'save' | 'cancel' | null>(null);
 
     const handleStartEdit = (group: Group) => {
+        editBlurActionRef.current = null;
         setEditingGroupId(group.id);
         setEditName(group.name);
     };
@@ -88,10 +97,12 @@ export const GroupList: FC<GroupListProps> = ({
             }
             setEditingGroupId(null);
         }
+        editBlurActionRef.current = null;
     };
 
     const handleCancelEdit = () => {
         setEditingGroupId(null);
+        editBlurActionRef.current = null;
     };
 
     // --- Dancer name edit ---
@@ -100,6 +111,7 @@ export const GroupList: FC<GroupListProps> = ({
             e.preventDefault();
             e.stopPropagation();
         }
+        editBlurActionRef.current = null;
         setEditingDancerId(dancer.id);
         setEditName(dancer.name);
     };
@@ -109,10 +121,28 @@ export const GroupList: FC<GroupListProps> = ({
             onUpdateDancer(editingDancerId, { name: editName.trim() });
         }
         setEditingDancerId(null);
+        editBlurActionRef.current = null;
     };
 
     const handleCancelDancerEdit = () => {
         setEditingDancerId(null);
+        editBlurActionRef.current = null;
+    };
+
+    const handleGroupInputBlur = () => {
+        if (editBlurActionRef.current === 'cancel') {
+            handleCancelEdit();
+            return;
+        }
+        handleSaveEdit();
+    };
+
+    const handleDancerInputBlur = () => {
+        if (editBlurActionRef.current === 'cancel') {
+            handleCancelDancerEdit();
+            return;
+        }
+        handleSaveDancerEdit();
     };
 
     // --- Dancer color picker ---
@@ -207,6 +237,7 @@ export const GroupList: FC<GroupListProps> = ({
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
+                        onBlur={handleDancerInputBlur}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveDancerEdit();
                             if (e.key === 'Escape') handleCancelDancerEdit();
@@ -217,12 +248,18 @@ export const GroupList: FC<GroupListProps> = ({
                         autoFocus
                     />
                     <TouchButton
+                        onPointerDown={() => {
+                            editBlurActionRef.current = 'save';
+                        }}
                         onClick={() => handleSaveDancerEdit()}
                         className="text-green-500 hover:text-green-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                     >
                         <Check size={16} />
                     </TouchButton>
                     <TouchButton
+                        onPointerDown={() => {
+                            editBlurActionRef.current = 'cancel';
+                        }}
                         onClick={() => handleCancelDancerEdit()}
                         className="text-slate-500 hover:text-slate-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                     >
@@ -361,6 +398,7 @@ export const GroupList: FC<GroupListProps> = ({
                                                 type="text"
                                                 value={editName}
                                                 onChange={(e) => setEditName(e.target.value)}
+                                                onBlur={handleGroupInputBlur}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') handleSaveEdit();
                                                     if (e.key === 'Escape') handleCancelEdit();
@@ -369,12 +407,18 @@ export const GroupList: FC<GroupListProps> = ({
                                                 autoFocus
                                             />
                                             <TouchButton
+                                                onPointerDown={() => {
+                                                    editBlurActionRef.current = 'save';
+                                                }}
                                                 onClick={handleSaveEdit}
                                                 className="text-green-500 hover:text-green-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                             >
                                                 <Check size={16} />
                                             </TouchButton>
                                             <TouchButton
+                                                onPointerDown={() => {
+                                                    editBlurActionRef.current = 'cancel';
+                                                }}
                                                 onClick={handleCancelEdit}
                                                 className="text-slate-500 hover:text-slate-400 p-2 sm:p-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                                             >

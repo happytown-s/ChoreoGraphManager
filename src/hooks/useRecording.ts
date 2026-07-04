@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { StageRef } from '../components/Stage';
 import { getBestMimeType, getExtensionFromMime, generateRecordingFilename, getBrowserInfo, isTauri } from '../utils/platform';
 import { downloadBlob } from '../utils/file';
@@ -25,8 +25,20 @@ export function useRecording(projectName: string): RecordingAPI {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.requestData();
+      } catch (err) {
+        console.warn('[Recording] requestData() failed before stop:', err);
+      }
+
+      window.setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      }, 75);
+      return;
     }
+
   }, []);
 
   const startRecording = useCallback((
@@ -41,38 +53,110 @@ export function useRecording(projectName: string): RecordingAPI {
       return;
     }
 
+    if (typeof MediaRecorder === 'undefined') {
+      alert('Recording is not supported in this browser.');
+      return;
+    }
+
     // Get canvas stream
     const canvasStream = stageRef.current.getCanvasStream();
-    const tracks = canvasStream.getVideoTracks();
+    const tracks = [...canvasStream.getVideoTracks()];
+    const audio = audioRef.current;
+    let recordingAudioDestination: MediaStreamAudioDestinationNode | null = null;
+    let recordingAudioSource: MediaElementAudioSourceNode | null = null;
 
-    // Add audio track if available
-    if (audioDestNode && audioFile) {
+    if (audio && audioFile) {
+      try {
+        const sharedCtx = audioCtxRef?.current;
+        const existing = mediaElementSourceRef.current;
+
+        if (existing && existing.element === audio) {
+          recordingAudioSource = existing.source;
+          recordingAudioDestination = existing.ctx.createMediaStreamDestination();
+        } else {
+          const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          const audioCtx = sharedCtx ?? (AudioContextClass ? new AudioContextClass() : null);
+          if (!audioCtx) {
+            throw new Error('AudioContext not supported');
+          }
+
+          recordingAudioSource = audioCtx.createMediaElementSource(audio);
+          recordingAudioSource.connect(audioCtx.destination);
+          recordingAudioDestination = audioCtx.createMediaStreamDestination();
+          mediaElementSourceRef.current = { element: audio, source: recordingAudioSource, ctx: audioCtx };
+        }
+
+        if (recordingAudioDestination && recordingAudioSource) {
+          recordingAudioSource.connect(recordingAudioDestination);
+          tracks.push(...recordingAudioDestination.stream.getAudioTracks());
+        }
+      } catch (e) {
+        console.warn('[Recording] Could not capture audio element:', e);
+      }
+    } else if (audioDestNode && audioFile) {
       const audioTracks = audioDestNode.stream.getAudioTracks();
       tracks.push(...audioTracks);
     }
 
     const stream = new MediaStream(tracks);
-    const includeAudio = !!(audioDestNode && audioFile);
+    const includeAudio = stream.getAudioTracks().length > 0;
     const mimeType = getBestMimeType(includeAudio);
     const { isSafari } = getBrowserInfo();
 
     recordedChunksRef.current = [];
-    const recorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: 5000000,
-    });
-    mediaRecorderRef.current = recorder;
+    let recorder: MediaRecorder;
 
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) {
-        recordedChunksRef.current.push(e.data);
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 5000000,
+      });
+    } catch (err) {
+      console.error('[Recording] Failed to create MediaRecorder:', err);
+      if (recordingAudioSource && recordingAudioDestination) {
+        recordingAudioSource.disconnect(recordingAudioDestination);
+      }
+      stream.getTracks().forEach(track => track.stop());
+      alert('Recording could not start in this browser.');
+      return;
+    }
+
+    mediaRecorderRef.current = recorder;
+    let didFinalize = false;
+    let finalizeTimer: number | null = null;
+
+    const cleanupResources = () => {
+      if (finalizeTimer !== null) {
+        window.clearTimeout(finalizeTimer);
+        finalizeTimer = null;
+      }
+
+      if (recordingAudioSource && recordingAudioDestination) {
+        try {
+          recordingAudioSource.disconnect(recordingAudioDestination);
+        } catch (err) {
+          console.warn('[Recording] Failed to disconnect audio tap:', err);
+        }
+      }
+
+      stream.getTracks().forEach(track => track.stop());
+
+      if (mediaRecorderRef.current === recorder) {
+        mediaRecorderRef.current = null;
       }
     };
 
-    recorder.onstop = async () => {
-      const actualMimeType = recorder.mimeType;
+    const finalizeRecording = async () => {
+      if (didFinalize) {
+        return;
+      }
+      didFinalize = true;
+
+      const actualMimeType = recorder.mimeType || mimeType;
       const blob = new Blob(recordedChunksRef.current, { type: actualMimeType });
       console.log(`[Recording] Stopped. Blob size: ${blob.size}, type: ${actualMimeType}`);
+
+      cleanupResources();
 
       if (blob.size === 0) {
         alert('Recording failed (empty file). Please try again.');
@@ -96,45 +180,67 @@ export function useRecording(projectName: string): RecordingAPI {
       setIsRecording(false);
     };
 
-    // Small delay to ensure stream is ready
-    setTimeout(() => {
+    const scheduleFinalize = (delay: number) => {
+      if (didFinalize) {
+        return;
+      }
+
+      if (finalizeTimer !== null) {
+        window.clearTimeout(finalizeTimer);
+      }
+
+      finalizeTimer = window.setTimeout(() => {
+        void finalizeRecording();
+      }, delay);
+    };
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        recordedChunksRef.current.push(e.data);
+      }
+
+      if (recorder.state === 'inactive') {
+        scheduleFinalize(0);
+      }
+    };
+
+    recorder.onerror = (event) => {
+      console.error('[Recording] MediaRecorder error:', event);
+      scheduleFinalize(0);
+    };
+
+    recorder.onstop = async () => {
+      scheduleFinalize(250);
+    };
+
+    const startRecorder = async () => {
+      const captureTracks = canvasStream.getVideoTracks() as Array<MediaStreamTrack & { requestFrame?: () => void }>;
+
       if (isSafari || isTauri()) {
-        // Capture audio element for Tauri/Safari
-        const audio = audioRef.current;
-        if (audio && audioFile) {
-          try {
-            // Reuse existing MediaElementSource if the audio element hasn't changed
-            if (mediaElementSourceRef.current && mediaElementSourceRef.current.element === audio) {
-              // Already connected — just grab the audio tracks from the existing destination
-              const { ctx, source } = mediaElementSourceRef.current;
-              const dest = ctx.createMediaStreamDestination();
-              source.connect(dest);
-              source.connect(ctx.destination);
-              dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-            } else {
-              // First time for this audio element — create MediaElementSource
-              // Reuse the shared AudioContext from useAudio if available to avoid
-              // creating a second context on the same element (causes silent audio).
-              const sharedCtx = audioCtxRef?.current;
-              const audioCtx = sharedCtx ?? new AudioContext();
-              const source = audioCtx.createMediaElementSource(audio);
-              const dest = audioCtx.createMediaStreamDestination();
-              source.connect(dest);
-              source.connect(audioCtx.destination);
-              mediaElementSourceRef.current = { element: audio, source, ctx: audioCtx };
-              dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-            }
-          } catch (e) {
-            console.warn('[Recording] Could not capture audio element:', e);
-          }
+        try {
+          await mediaElementSourceRef.current?.ctx.resume();
+        } catch (err) {
+          console.warn('[Recording] Failed to resume audio context:', err);
         }
       }
 
       const timeslice = isSafari ? 100 : 1000;
-      recorder.start(timeslice);
-      console.log(`[Recording] Started with timeslice: ${timeslice}ms`);
-      setIsRecording(true);
-    }, 500);
+      try {
+        recorder.start(timeslice);
+        captureTracks.forEach(track => track.requestFrame?.());
+        console.log(`[Recording] Started with timeslice: ${timeslice}ms`);
+        setIsRecording(true);
+      } catch (err) {
+        console.error('[Recording] Failed to start recorder:', err);
+        cleanupResources();
+        setIsRecording(false);
+        alert('Recording could not start in this browser.');
+      }
+    };
+
+    window.requestAnimationFrame(() => {
+      void startRecorder();
+    });
   }, [projectName]);
 
   return { isRecording, startRecording, stopRecording };

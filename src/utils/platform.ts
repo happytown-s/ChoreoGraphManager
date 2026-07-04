@@ -23,12 +23,17 @@ export const getBestMimeType = (includeAudio: boolean): string => {
   const { isSafari, isChrome, isTauriEnv } = getBrowserInfo();
 
   if (isSafari || isTauriEnv) {
-    const safariTypes = [
-      'video/mp4;codecs="avc1,mp4a.40.2"',
-      'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-      'video/mp4;codecs=avc1',
-      'video/mp4',
-    ];
+    const safariTypes = includeAudio
+      ? [
+          'video/mp4;codecs="avc1,mp4a.40.2"',
+          'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+          'video/mp4',
+        ]
+      : [
+          'video/mp4;codecs="avc1.42E01E"',
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+        ];
     for (const type of safariTypes) {
       if (MediaRecorder.isTypeSupported(type)) {
         console.log(`[Safari/Tauri] Using MIME: ${type}`);
@@ -38,13 +43,19 @@ export const getBestMimeType = (includeAudio: boolean): string => {
   }
 
   if (isChrome) {
-    const chromeTypes = [
-      'video/webm;codecs="vp9,opus"',
-      'video/webm;codecs="vp9"',
-      'video/webm;codecs="vp8,opus"',
-      'video/webm;codecs="vp8"',
-      'video/webm',
-    ];
+    const chromeTypes = includeAudio
+      ? [
+          'video/webm;codecs="vp9,opus"',
+          'video/webm;codecs="vp8,opus"',
+          'video/webm;codecs="vp9"',
+          'video/webm;codecs="vp8"',
+          'video/webm',
+        ]
+      : [
+          'video/webm;codecs="vp9"',
+          'video/webm;codecs="vp8"',
+          'video/webm',
+        ];
     for (const type of chromeTypes) {
       if (MediaRecorder.isTypeSupported(type)) {
         console.log(`[Chrome] Using MIME: ${type}`);
